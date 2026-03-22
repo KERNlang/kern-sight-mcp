@@ -1,8 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M12 2L3 7v6c0 5.25 3.81 10.14 9 11.25C17.19 23.14 21 18.25 21 13V7l-9-5z"/>
-  <circle cx="12" cy="12" r="3" fill="none" stroke="#ef4444" stroke-width="1.5"/>
-  <line x1="12" y1="9" x2="12" y2="6" stroke="#ef4444" stroke-width="1"/>
-  <line x1="12" y1="18" x2="12" y2="15" stroke="#ef4444" stroke-width="1"/>
-  <line x1="9" y1="12" x2="6" y2="12" stroke="#ef4444" stroke-width="1"/>
-  <line x1="18" y1="12" x2="15" y2="12" stroke="#ef4444" stroke-width="1"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <!-- K vertical stem -->
+  <rect x="5" y="2" width="3" height="16" rx="0.5"/>
+  <!-- K upper arm -->
+  <polygon points="8,9 8,11.5 17,2 14.5,2"/>
+  <!-- K lower arm -->
+  <polygon points="8,10.5 8,13 14.5,20 17,20"/>
+  <!-- Red underline bar -->
+  <rect x="5" y="19.5" width="12" height="1.5" rx="0.5" fill="#ef4444"/>
 </svg>
