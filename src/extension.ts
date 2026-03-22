@@ -55,9 +55,10 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.window.showInformationMessage('Fix suggestion copied to clipboard');
     };
 
-    // Update sidebar when switching files
+    // Update sidebar when switching files — but not when jumping to a finding
     context.subscriptions.push(
       vscode.window.onDidChangeActiveTextEditor((editor) => {
+        if (sidebarProvider.isJumping) return;
         if (editor && SUPPORTED_LANGUAGES.has(editor.document.languageId)) {
           reviewDocument(editor.document);
         }

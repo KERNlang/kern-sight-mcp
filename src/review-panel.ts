@@ -20,10 +20,21 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'kernMcpSecurity.sidebar';
   private _view?: vscode.WebviewView;
   private _current: McpReviewResult | null = null;
+  private _jumping = false;
   public onScanRequested?: () => void;
   public onCopySuggestionRequested?: (suggestion: string) => void;
 
   constructor(private readonly _context: vscode.ExtensionContext) {}
+
+  /** True if sidebar just triggered a jump — extension should skip the next editor change event */
+  get isJumping(): boolean {
+    return this._jumping;
+  }
+
+  /** Path of the currently displayed file */
+  get currentFilePath(): string | null {
+    return this._current?.filePath ?? null;
+  }
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
     this._view = webviewView;
@@ -43,6 +54,8 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
 
   showLoading(): void {
     if (!this._view) return;
+    // Don't clear sidebar if we already have results — avoids flicker on re-scan
+    if (this._current) return;
     this._view.webview.html = buildLoadingHTML();
   }
 
@@ -68,6 +81,10 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
   }
 
   private _jumpToFile(filePath: string, line: number, col: number): void {
+    // Set flag so extension skips the editor change event caused by this jump
+    this._jumping = true;
+    setTimeout(() => { this._jumping = false; }, 500);
+
     const uri = vscode.Uri.file(filePath);
     const pos = new vscode.Position(Math.max(0, line - 1), Math.max(0, col - 1));
     const range = new vscode.Range(pos, pos);
