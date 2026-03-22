@@ -5,11 +5,11 @@
   "version": "0.1.0",
   "publisher": "kernlang",
   "license": "SEE LICENSE IN LICENSE",
-  "private": true,
+  "private": false,
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cukas/kern-mcp-security"
+    "url": "https://github.com/KERNlang/kern-sight-mcp"
   },
   "engines": {
     "vscode": "^1.85.0"
@@ -131,6 +131,6 @@
     "@vscode/vsce": "^2.24.0"
   },
   "dependencies": {
-    "@kernlang/review-mcp": "file:../kern-lang/packages/review-mcp"
+    "@kernlang/review-mcp": "^0.1.0"
   }
 }
