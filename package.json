@@ -1,0 +1,136 @@
+{
+  "name": "kern-mcp-security",
+  "displayName": "KERN MCP Security",
+  "description": "Security scanner for MCP (Model Context Protocol) servers — 11 rules, OWASP MCP Top 10",
+  "version": "0.1.0",
+  "publisher": "kernlang",
+  "license": "SEE LICENSE IN LICENSE",
+  "private": true,
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cukas/kern-mcp-security"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "mcp",
+    "model context protocol",
+    "security",
+    "scanner",
+    "prompt injection",
+    "owasp"
+  ],
+  "activationEvents": [
+    "onLanguage:typescript",
+    "onLanguage:javascript",
+    "onLanguage:python",
+    "onView:kernMcpSecurity.sidebar"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "kernMcpSecurity",
+          "title": "KERN MCP Security",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "kernMcpSecurity": [
+        {
+          "type": "webview",
+          "id": "kernMcpSecurity.sidebar",
+          "name": "MCP Security"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "kernMcpSecurity.scanFile",
+        "title": "KERN: Scan MCP Server",
+        "icon": "$(search)"
+      },
+      {
+        "command": "kernMcpSecurity.showOutput",
+        "title": "KERN: Show MCP Security Output"
+      },
+      {
+        "command": "kernMcpSecurity.openSettings",
+        "title": "KERN: MCP Security Settings",
+        "icon": "$(gear)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "kernMcpSecurity.scanFile",
+        "key": "ctrl+shift+m",
+        "mac": "cmd+shift+m",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "kernMcpSecurity.openSettings",
+          "group": "navigation",
+          "when": "view == kernMcpSecurity.sidebar"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "kernMcpSecurity.scanFile",
+          "group": "navigation",
+          "when": "resourceLangId == typescript || resourceLangId == javascript || resourceLangId == python"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "kernMcpSecurity.scanFile",
+          "group": "kern",
+          "when": "resourceLangId == typescript || resourceLangId == javascript || resourceLangId == python"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "KERN MCP Security",
+      "properties": {
+        "kernMcpSecurity.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable KERN MCP Security diagnostics"
+        },
+        "kernMcpSecurity.severity": {
+          "type": "string",
+          "default": "all",
+          "enum": ["all", "errors", "warnings"],
+          "description": "Minimum severity level to show"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "package": "vsce package",
+    "publish": "vsce publish",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.4.0",
+    "@vscode/vsce": "^2.24.0"
+  },
+  "dependencies": {
+    "@kernlang/review-mcp": "file:../kern-lang/packages/review-mcp"
+  }
+}
