@@ -88,11 +88,18 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
     const uri = vscode.Uri.file(filePath);
     const pos = new vscode.Position(Math.max(0, line - 1), Math.max(0, col - 1));
     const range = new vscode.Range(pos, pos);
-    vscode.window.showTextDocument(uri, {
+    const existingEditor = vscode.window.visibleTextEditors.find((editor) => editor.document.uri.toString() === uri.toString());
+    const options: vscode.TextDocumentShowOptions = {
       selection: range,
-      viewColumn: vscode.ViewColumn.One,
+      viewColumn: existingEditor?.viewColumn ?? vscode.window.activeTextEditor?.viewColumn,
       preserveFocus: false,
-    });
+    };
+
+    if (existingEditor) {
+      void vscode.window.showTextDocument(existingEditor.document, options);
+    } else {
+      void vscode.window.showTextDocument(uri, options);
+    }
   }
 }
 
