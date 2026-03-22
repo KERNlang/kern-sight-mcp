@@ -242,9 +242,8 @@ function reviewDocument(document: vscode.TextDocument): void {
       };
       sidebarProvider.update(result);
     } else if (msg.type === 'error') {
-      updateStatusBar('error', 0);
-      outputChannel.appendLine(`[${fileName}] Analysis error: ${msg.message}`);
-      sidebarProvider.showNotMcp();
+      // Log error but don't show "not MCP" — worker may still send a result after partial errors
+      outputChannel.appendLine(`[${fileName}] Analysis warning: ${msg.message}`);
     }
   });
 
@@ -252,7 +251,8 @@ function reviewDocument(document: vscode.TextDocument): void {
     clearTimeout(timeout);
     activeWorkers.delete(key);
     updateStatusBar('error', 0);
-    outputChannel.appendLine(`[${fileName}] Worker error: ${err.message}`);
+    outputChannel.appendLine(`[${fileName}] Worker crash: ${err.message}`);
+    outputChannel.show();
   });
 }
 
