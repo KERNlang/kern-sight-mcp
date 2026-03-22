@@ -24,6 +24,8 @@ let statusBarItem: vscode.StatusBarItem;
 let sidebarProvider: McpSecuritySidebarProvider;
 let debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let activeWorkers = new Map<string, Worker>();
+let lastReviewedKey = '';
+let lastReviewedVersion = -1;
 const MAX_CONCURRENT_WORKERS = 3;
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -171,13 +173,20 @@ function reviewDocument(document: vscode.TextDocument): void {
   if (!config.enabled) return;
 
   const key = document.uri.toString();
+  const version = document.version;
+
+  // Skip re-scan if same file + same version (e.g. clicking a finding jumps back to same file)
+  if (key === lastReviewedKey && version === lastReviewedVersion) return;
+
   if (activeWorkers.size >= MAX_CONCURRENT_WORKERS && !activeWorkers.has(key)) return;
 
   const source = document.getText();
   const filePath = document.uri.fsPath;
   const uri = document.uri;
-  const version = document.version;
   const fileName = path.basename(filePath);
+
+  lastReviewedKey = key;
+  lastReviewedVersion = version;
 
   // Cancel any in-flight worker for this file
   cancelWorker(key);
