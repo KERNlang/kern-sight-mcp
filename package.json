@@ -66,6 +66,10 @@
         "command": "kernMcpSecurity.openSettings",
         "title": "KERN: MCP Security Settings",
         "icon": "$(gear)"
+      },
+      {
+        "command": "kernMcpSecurity.generateBadge",
+        "title": "KERN: Generate MCP Security Badge"
       }
     ],
     "keybindings": [
