@@ -261,7 +261,8 @@ function buildFindingHTML(f: ReviewFinding, index: number, result: McpReviewResu
   const delay = index * 0.12;
 
   const actionBtns: string[] = [];
-  const hasSafeFix = safeFixRules?.has(f.ruleId);
+  const isPython = result.lang === 'python';
+  const hasSafeFix = !isPython && safeFixRules?.has(f.ruleId);
   if (hasSafeFix) {
     actionBtns.push(`<button class="finding-action-btn fix-btn" data-action="applyFix" data-filepath="${escapeHTML(fp)}" data-line="${line}" data-ruleid="${escapeHTML(f.ruleId)}">&#9889; FIX</button>`);
   }
