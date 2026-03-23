@@ -21,8 +21,10 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
   private _current: McpReviewResult | null = null;
   private _jumping = false;
+  public safeFixRules: Set<string> = new Set();
   public onScanRequested?: () => void;
   public onCopySuggestionRequested?: (suggestion: string) => void;
+  public onApplyFixRequested?: (filePath: string, line: number, ruleId: string) => void;
 
   constructor(private readonly _context: vscode.ExtensionContext) {}
 
@@ -48,6 +50,8 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
         this.onScanRequested?.();
       } else if (msg.type === 'copySuggestion') {
         this.onCopySuggestionRequested?.(msg.suggestion);
+      } else if (msg.type === 'applyFix') {
+        this.onApplyFixRequested?.(msg.filePath, msg.line, msg.ruleId);
       }
     });
   }
@@ -73,7 +77,7 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
   private _render(): void {
     if (!this._view) return;
     if (this._current) {
-      this._view.webview.html = buildReviewHTML(this._current);
+      this._view.webview.html = buildReviewHTML(this._current, this.safeFixRules);
     } else {
       this._view.webview.html = buildNotMcpHTML();
     }
@@ -105,7 +109,7 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
 
 // ── HTML builders ─────────────────────────────────────────────────────
 
-function buildReviewHTML(result: McpReviewResult): string {
+function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<string>): string {
   const { fileName, findings, irNodes, lang } = result;
   const bugs = findings.filter((f) => f.severity === 'error');
   const warnings = findings.filter((f) => f.severity === 'warning');
@@ -137,7 +141,7 @@ function buildReviewHTML(result: McpReviewResult): string {
     ${findings.length === 0 ? '<div class="clean-state"><div class="check">&#10003;</div><p>No vulnerabilities found.</p></div>' : ''}
 
     ${bugs.length > 0 ? '<div class="section-label" data-severity-section="error">Bugs</div>' : ''}
-    ${bugs.map((f, i) => buildFindingHTML(f, i, result)).join('')}
+    ${bugs.map((f, i) => buildFindingHTML(f, i, result, safeFixRules)).join('')}
 
     ${warnings.length > 0 ? '<div class="section-label" data-severity-section="warning">Warnings</div>' : ''}
     ${warnings.map((f, i) => buildFindingHTML(f, i + bugs.length, result)).join('')}
@@ -196,7 +200,7 @@ function buildIRSection(irNodes: IRNode[]): string {
     <div class="ir-tree">${actionCards}</div>`;
 }
 
-function buildFindingHTML(f: ReviewFinding, index: number, result: McpReviewResult): string {
+function buildFindingHTML(f: ReviewFinding, index: number, result: McpReviewResult, safeFixRules?: Set<string>): string {
   const line = f.primarySpan.startLine;
   const col = f.primarySpan.startCol;
   const fp = result.filePath;
@@ -205,8 +209,12 @@ function buildFindingHTML(f: ReviewFinding, index: number, result: McpReviewResu
   const delay = index * 0.12;
 
   const actionBtns: string[] = [];
+  const hasSafeFix = safeFixRules?.has(f.ruleId);
+  if (hasSafeFix) {
+    actionBtns.push(`<button class="finding-action-btn fix-btn" data-action="applyFix" data-filepath="${escapeHTML(fp)}" data-line="${line}" data-ruleid="${escapeHTML(f.ruleId)}">&#9889; FIX</button>`);
+  }
   if (f.suggestion) {
-    actionBtns.push(`<button class="finding-action-btn" data-action="copySuggestion" data-suggestion="${escapeHTML(f.suggestion)}">COPY FIX</button>`);
+    actionBtns.push(`<button class="finding-action-btn" data-action="copySuggestion" data-suggestion="${escapeHTML(f.suggestion)}">COPY</button>`);
   }
   const actionsHtml = actionBtns.length > 0 ? `<div class="finding-actions">${actionBtns.join('')}</div>` : '';
 
@@ -635,6 +643,22 @@ function buildShell(content: string): string {
     background: var(--surface-hover);
   }
 
+  .finding-action-btn.fix-btn {
+    color: var(--kern-green);
+    border-color: rgba(34, 197, 94, 0.3);
+  }
+
+  .finding-action-btn.fix-btn:hover {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: var(--kern-green);
+  }
+
+  .finding-action-btn.applied {
+    color: var(--kern-green);
+    border-color: rgba(34, 197, 94, 0.3);
+    pointer-events: none;
+  }
+
   /* -- Clean state -- */
 
   .clean-state {
@@ -816,10 +840,21 @@ ${content}
     if (actionBtn) {
       e.stopPropagation();
       const action = actionBtn.dataset.action;
+      if (action === 'applyFix') {
+        vscode.postMessage({
+          type: 'applyFix',
+          filePath: actionBtn.dataset.filepath,
+          line: parseInt(actionBtn.dataset.line, 10),
+          ruleId: actionBtn.dataset.ruleid,
+        });
+        actionBtn.textContent = 'Applied';
+        actionBtn.classList.add('applied');
+        return;
+      }
       if (action === 'copySuggestion') {
         vscode.postMessage({ type: 'copySuggestion', suggestion: actionBtn.dataset.suggestion });
         actionBtn.textContent = 'Copied';
-        setTimeout(() => { actionBtn.textContent = 'COPY FIX'; }, 1500);
+        setTimeout(() => { actionBtn.textContent = 'COPY'; }, 1500);
       }
       return;
     }

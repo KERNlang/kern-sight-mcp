@@ -4,7 +4,7 @@ import * as path from 'path';
 import type { ReviewFinding } from '@kernlang/review-mcp';
 import { McpSecuritySidebarProvider } from './review-panel';
 import type { McpReviewResult } from './review-panel';
-import { McpSecurityCodeActionProvider } from './code-actions';
+import { McpSecurityCodeActionProvider, SAFE_AUTOFIXES, SAFE_AUTOFIX_RULES } from './code-actions';
 import { initConfig, getConfig } from './config';
 
 const SUPPORTED_LANGUAGES = new Set([
@@ -41,6 +41,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // Register sidebar
     sidebarProvider = new McpSecuritySidebarProvider(context);
+    sidebarProvider.safeFixRules = SAFE_AUTOFIX_RULES;
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(McpSecuritySidebarProvider.viewType, sidebarProvider),
     );
@@ -55,6 +56,20 @@ export function activate(context: vscode.ExtensionContext): void {
     sidebarProvider.onCopySuggestionRequested = (suggestion) => {
       vscode.env.clipboard.writeText(suggestion);
       vscode.window.showInformationMessage('Fix suggestion copied to clipboard');
+    };
+
+    sidebarProvider.onApplyFixRequested = (filePath, line, ruleId) => {
+      void (async () => {
+        const fixFn = SAFE_AUTOFIXES[ruleId];
+        if (!fixFn) return;
+        const uri = vscode.Uri.file(filePath);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        const edit = fixFn(doc, line);
+        if (edit) {
+          await vscode.workspace.applyEdit(edit);
+          outputChannel.appendLine(`[Fix] Applied autofix: ${ruleId} in ${path.basename(filePath)}`);
+        }
+      })();
     };
 
     // Update sidebar when switching files — but not when jumping to a finding
