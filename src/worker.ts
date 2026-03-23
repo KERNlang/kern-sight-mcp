@@ -1,6 +1,7 @@
 import { parentPort, workerData } from 'worker_threads';
 import { reviewMCPSource, inferMCP, detectMCPServer } from '@kernlang/review-mcp';
 import type { ReviewFinding } from '@kernlang/review-mcp';
+import { computeSecurityScore } from './score';
 
 interface WorkerInput {
   source: string;
@@ -35,4 +36,5 @@ try {
   irNodes = [];
 }
 
-parentPort?.postMessage({ type: 'result', findings, irNodes, lang });
+const score = computeSecurityScore(irNodes as any[], findings);
+parentPort?.postMessage({ type: 'result', findings, irNodes, lang, score });

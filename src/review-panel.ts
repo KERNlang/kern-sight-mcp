@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import type { ReviewFinding } from '@kernlang/review-mcp';
+import type { SecurityScore } from './score';
+import { gradeColor } from './score';
 
 interface IRNode {
   type: string;
@@ -14,6 +16,7 @@ export interface McpReviewResult {
   findings: ReviewFinding[];
   irNodes: IRNode[];
   lang: 'typescript' | 'python' | null;
+  score?: SecurityScore;
 }
 
 export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
@@ -129,6 +132,8 @@ function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<string>): s
       ${langBadge}
     </div>
 
+    ${result.score ? buildScoreHero(result.score) : ''}
+
     <div class="summary">
       ${bugs.length > 0 ? `<div class="stat"><span class="stat-num bugs">${bugs.length}</span><span class="stat-label">Bug${bugs.length > 1 ? 's' : ''}</span></div>` : ''}
       ${warnings.length > 0 ? `${bugs.length > 0 ? '<div class="divider"></div>' : ''}<div class="stat"><span class="stat-num warns">${warnings.length}</span><span class="stat-label">Warning${warnings.length > 1 ? 's' : ''}</span></div>` : ''}
@@ -136,7 +141,7 @@ function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<string>): s
       ${findings.length === 0 ? '<div class="stat"><span class="stat-num clean">0</span><span class="stat-label">Issues</span></div>' : ''}
     </div>
 
-    ${irNodes.length > 0 ? buildIRSection(irNodes) : ''}
+    ${irNodes.length > 0 ? buildIRSection(irNodes, result.score) : ''}
 
     ${findings.length === 0 ? '<div class="clean-state"><div class="check">&#10003;</div><p>No vulnerabilities found.</p></div>' : ''}
 
@@ -153,7 +158,47 @@ function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<string>): s
   `);
 }
 
-function buildIRSection(irNodes: IRNode[]): string {
+function buildScoreHero(score: SecurityScore): string {
+  const color = gradeColor(score.grade);
+  const circumference = 2 * Math.PI * 42;
+  const dashLength = (score.total / 100) * circumference;
+
+  return `
+    <div class="score-hero">
+      <div class="score-ring-container">
+        <svg width="96" height="96" viewBox="0 0 96 96">
+          <circle cx="48" cy="48" r="42" fill="none" stroke="var(--border)" stroke-width="4"/>
+          <circle cx="48" cy="48" r="42" fill="none" stroke="${color}" stroke-width="4"
+            stroke-dasharray="${dashLength} ${circumference}"
+            stroke-linecap="round" transform="rotate(-90 48 48)"
+            style="transition: stroke-dasharray 1s ease-out"/>
+        </svg>
+        <div class="score-number" style="color:${color}">${score.total}</div>
+      </div>
+      <div class="score-details">
+        <div class="grade-badge" style="background:${color}">${score.grade}</div>
+        <div class="score-metrics">
+          ${buildMetricBar('Guards', score.guardCoverage, '40%')}
+          ${buildMetricBar('Validation', score.inputValidation, '25%')}
+          ${buildMetricBar('Compliance', score.ruleCompliance, '20%')}
+          ${buildMetricBar('Auth', score.authPosture, '15%')}
+        </div>
+      </div>
+    </div>`;
+}
+
+function buildMetricBar(label: string, value: number, weight: string): string {
+  const color = value >= 80 ? 'var(--kern-green)' : value >= 50 ? 'var(--kern-orange)' : 'var(--kern-red)';
+  return `
+    <div class="metric-row">
+      <span class="metric-label">${label}</span>
+      <span class="metric-weight">${weight}</span>
+      <div class="metric-bar"><div class="metric-fill" style="width:${value}%;background:${color}"></div></div>
+      <span class="metric-value">${value}</span>
+    </div>`;
+}
+
+function buildIRSection(irNodes: IRNode[], score?: SecurityScore): string {
   const actions = irNodes.filter(n => n.type === 'action');
   if (actions.length === 0) return '';
 
@@ -184,11 +229,18 @@ function buildIRSection(irNodes: IRNode[]): string {
     const confidencePercent = Math.round(confidence * 100);
     const confClass = confidencePercent >= 80 ? 'high' : confidencePercent >= 50 ? 'mid' : 'low';
 
+    // Per-tool score badge from SecurityScore
+    const toolScore = score?.perTool.find(t => t.toolName === name);
+    const toolScoreBadge = toolScore
+      ? `<span class="ir-tool-score" style="color:${gradeColor(toolScore.grade)}">${toolScore.grade}</span>`
+      : '';
+
     return `
       <div class="ir-action">
         <div class="ir-action-header">
           ${statusDot}
           <span class="ir-action-name">${escapeHTML(name)}</span>
+          ${toolScoreBadge}
           <span class="ir-confidence ${confClass}">${confidencePercent}%</span>
         </div>
         <div class="ir-children">${childrenHTML}</div>
@@ -353,6 +405,115 @@ function buildShell(content: string): string {
     font-size: 12px;
     font-weight: 700;
     color: var(--text);
+  }
+
+  /* -- Score hero -- */
+
+  .score-hero {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    animation: fadeSlideIn 0.5s ease-out both;
+  }
+
+  .score-ring-container {
+    position: relative;
+    width: 96px;
+    height: 96px;
+    flex-shrink: 0;
+  }
+
+  .score-number {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 28px;
+    font-weight: 900;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .score-details {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .grade-badge {
+    display: inline-block;
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 0.05em;
+    padding: 2px 10px;
+    border-radius: 4px;
+    color: #fff;
+    font-family: 'SF Mono', monospace;
+    margin-bottom: 10px;
+  }
+
+  .score-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .metric-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 9px;
+    font-family: 'SF Mono', monospace;
+  }
+
+  .metric-label {
+    width: 62px;
+    color: var(--text-secondary);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .metric-weight {
+    width: 22px;
+    color: var(--text-muted);
+    font-size: 8px;
+    flex-shrink: 0;
+  }
+
+  .metric-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .metric-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.8s ease-out;
+  }
+
+  .metric-value {
+    width: 22px;
+    text-align: right;
+    color: var(--text-muted);
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* -- Tool score badge in IR tree -- */
+
+  .ir-tool-score {
+    font-size: 10px;
+    font-weight: 900;
+    font-family: 'SF Mono', monospace;
+    margin-left: auto;
+    padding: 0 4px;
   }
 
   .lang-badge {

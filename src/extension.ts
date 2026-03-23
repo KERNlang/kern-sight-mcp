@@ -6,6 +6,7 @@ import { McpSecuritySidebarProvider } from './review-panel';
 import type { McpReviewResult } from './review-panel';
 import { McpSecurityCodeActionProvider, SAFE_AUTOFIXES, SAFE_AUTOFIX_RULES } from './code-actions';
 import { initConfig, getConfig } from './config';
+import type { SecurityScore } from './score';
 
 const SUPPORTED_LANGUAGES = new Set([
   'typescript', 'typescriptreact', 'javascript', 'javascriptreact', 'python',
@@ -253,6 +254,7 @@ function reviewDocument(document: vscode.TextDocument): void {
     findings?: ReviewFinding[];
     irNodes?: IRNode[];
     lang?: 'typescript' | 'python' | null;
+    score?: SecurityScore;
     message?: string;
   }) => {
     if (msg.type === 'result') {
@@ -300,9 +302,11 @@ function reviewDocument(document: vscode.TextDocument): void {
         findings,
         irNodes: msg.irNodes ?? [],
         lang,
+        score: msg.score,
       };
       if (activeDoc) {
-        updateStatusBar('done', findings.length);
+        const scoreGrade = msg.score ? `${msg.score.grade}` : '';
+        updateStatusBar('done', findings.length, scoreGrade);
         sidebarProvider.update(result);
       }
     } else if (msg.type === 'error') {
@@ -331,7 +335,7 @@ function reviewDocument(document: vscode.TextDocument): void {
   });
 }
 
-function updateStatusBar(state: 'idle' | 'analyzing' | 'done' | 'error', count: number): void {
+function updateStatusBar(state: 'idle' | 'analyzing' | 'done' | 'error', count: number, grade?: string): void {
   switch (state) {
     case 'idle':
       statusBarItem.text = 'KERN MCP';
@@ -344,8 +348,12 @@ function updateStatusBar(state: 'idle' | 'analyzing' | 'done' | 'error', count: 
       statusBarItem.backgroundColor = undefined;
       break;
     case 'done':
-      statusBarItem.text = count > 0 ? `$(warning) KERN MCP: ${count}` : '$(check) KERN MCP';
-      statusBarItem.tooltip = count > 0 ? `${count} finding(s) — click to view` : 'No findings';
+      statusBarItem.text = grade
+        ? `$(shield) KERN MCP: ${grade}`
+        : count > 0 ? `$(warning) KERN MCP: ${count}` : '$(check) KERN MCP';
+      statusBarItem.tooltip = grade
+        ? `Score: ${grade} — ${count} finding(s)`
+        : count > 0 ? `${count} finding(s) — click to view` : 'No findings';
       statusBarItem.backgroundColor = undefined;
       break;
     case 'error':
