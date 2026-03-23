@@ -7,8 +7,6 @@ import type { McpReviewResult } from './review-panel';
 import { McpSecurityCodeActionProvider, SAFE_AUTOFIXES, SAFE_AUTOFIX_RULES } from './code-actions';
 import { initConfig, getConfig } from './config';
 import type { SecurityScore } from './score';
-import { scanWorkspace } from './workspace-scan';
-import { generateBadgeMarkdown, generateReportJSON, updateReadme } from './badge';
 
 const SUPPORTED_LANGUAGES = new Set([
   'typescript', 'typescriptreact', 'javascript', 'javascriptreact', 'python',
@@ -131,13 +129,16 @@ export function activate(context: vscode.ExtensionContext): void {
           vscode.window.showWarningMessage('No workspace folder open');
           return;
         }
+        // Lazy imports — these pull in @kernlang/review-mcp (ts-morph) which must NOT load at activation
+        const { scanWorkspace } = require('./workspace-scan') as typeof import('./workspace-scan');
+        const { generateReportJSON, updateReadme } = require('./badge') as typeof import('./badge');
+        const fs = require('fs') as typeof import('fs');
+
         const root = folder.uri.fsPath;
         outputChannel.appendLine('[Badge] Scanning workspace...');
         const { score, files } = scanWorkspace(root);
         outputChannel.appendLine(`[Badge] Found ${files.length} MCP server file(s), score: ${score.total} (${score.grade})`);
 
-        // Write JSON report
-        const fs = require('fs') as typeof import('fs');
         const reportPath = path.join(root, 'kern-mcp-security.json');
         const aggregate: import('./review-panel').McpReviewResult = {
           fileName: 'workspace',
@@ -151,7 +152,6 @@ export function activate(context: vscode.ExtensionContext): void {
         fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n', 'utf-8');
         outputChannel.appendLine(`[Badge] Wrote ${reportPath}`);
 
-        // Update README
         updateReadme(root, score, aggregate);
         outputChannel.appendLine(`[Badge] Updated README.md`);
 
