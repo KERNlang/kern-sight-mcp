@@ -24,6 +24,7 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
   private _current: McpReviewResult | null = null;
   private _jumping = false;
+  private _configServers: import('./config-guardian').McpServerEntry[] = [];
   public safeFixRules: Set<string> = new Set();
   public onScanRequested?: () => void;
   public onCopySuggestionRequested?: (suggestion: string) => void;
@@ -77,12 +78,17 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
     this._view.webview.html = buildNotMcpHTML();
   }
 
+  updateConfigGuardian(servers: import('./config-guardian').McpServerEntry[]): void {
+    this._configServers = servers;
+    this._render();
+  }
+
   private _render(): void {
     if (!this._view) return;
     if (this._current) {
-      this._view.webview.html = buildReviewHTML(this._current, this.safeFixRules);
+      this._view.webview.html = buildReviewHTML(this._current, this.safeFixRules, this._configServers);
     } else {
-      this._view.webview.html = buildNotMcpHTML();
+      this._view.webview.html = buildNotMcpHTML(this._configServers);
     }
     this._view.show?.(true);
   }
@@ -112,7 +118,7 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
 
 // ── HTML builders ─────────────────────────────────────────────────────
 
-function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<string>): string {
+function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<string>, configServers?: import('./config-guardian').McpServerEntry[]): string {
   const { fileName, findings, irNodes, lang } = result;
   const bugs = findings.filter((f) => f.severity === 'error');
   const warnings = findings.filter((f) => f.severity === 'warning');
@@ -153,6 +159,8 @@ function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<string>): s
 
     ${info.length > 0 ? '<div class="section-label" data-severity-section="info">Notes</div>' : ''}
     ${info.map((f, i) => buildFindingHTML(f, i + bugs.length + warnings.length, result)).join('')}
+
+    ${configServers && configServers.length > 0 ? buildConfigGuardianSection(configServers) : ''}
 
     <div class="footer"><span class="brand-kern-sm">KERN</span> <span class="brand-mcp-sm">MCP</span> · <a href="https://kernlang.dev" style="color:var(--text-muted);text-decoration:none;border-bottom:1px solid var(--border);">kernlang.dev</a></div>
   `);
@@ -261,8 +269,7 @@ function buildFindingHTML(f: ReviewFinding, index: number, result: McpReviewResu
   const delay = index * 0.12;
 
   const actionBtns: string[] = [];
-  const isPython = result.lang === 'python';
-  const hasSafeFix = !isPython && safeFixRules?.has(f.ruleId);
+  const hasSafeFix = safeFixRules?.has(f.ruleId);
   if (hasSafeFix) {
     actionBtns.push(`<button class="finding-action-btn fix-btn" data-action="applyFix" data-filepath="${escapeHTML(fp)}" data-line="${line}" data-ruleid="${escapeHTML(f.ruleId)}">&#9889; FIX</button>`);
   }
@@ -316,13 +323,58 @@ function buildLoadingHTML(): string {
   `);
 }
 
-function buildNotMcpHTML(): string {
+function buildNotMcpHTML(configServers?: import('./config-guardian').McpServerEntry[]): string {
   return buildShell(`
     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 16px;text-align:center;gap:16px;">
       <div class="header-brand"><span class="kern">KE<span class="kern-underline"></span>RN</span> <span class="mcp">MCP</span></div>
       <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;max-width:260px;">This file is not an MCP server.<br><br>Open a file that imports<br><code style="font-size:11px;color:var(--kern-orange);background:rgba(249,115,22,0.1);padding:2px 6px;border-radius:3px;">@modelcontextprotocol/sdk</code><br>or<br><code style="font-size:11px;color:var(--kern-orange);background:rgba(249,115,22,0.1);padding:2px 6px;border-radius:3px;">mcp.server</code></p>
     </div>
+    ${configServers && configServers.length > 0 ? buildConfigGuardianSection(configServers) : ''}
   `);
+}
+
+function buildConfigGuardianSection(servers: import('./config-guardian').McpServerEntry[]): string {
+  const trustIcon = (trust: string) => {
+    if (trust === 'verified') return '<span class="guardian-trust verified">&#9679;</span>';
+    if (trust === 'risky') return '<span class="guardian-trust risky">&#9679;</span>';
+    return '<span class="guardian-trust unknown">&#9679;</span>';
+  };
+
+  const sourceLabel = (source: string) => {
+    if (source === 'claude') return 'Claude Desktop';
+    if (source === 'cursor') return 'Cursor';
+    return 'VS Code';
+  };
+
+  const serverCards = servers.map((s) => {
+    const issueList = s.issues.map((issue) => {
+      const sevClass = issue.severity === 'error' ? 'bug' : issue.severity === 'warning' ? 'warn' : 'info';
+      return `<div class="guardian-issue ${sevClass}"><span class="guardian-issue-icon">${issue.severity === 'error' ? '&#9888;' : '&#9432;'}</span>${escapeHTML(issue.message)}</div>`;
+    }).join('');
+
+    return `
+      <div class="guardian-server">
+        <div class="guardian-server-header">
+          ${trustIcon(s.trust)}
+          <span class="guardian-server-name">${escapeHTML(s.name)}</span>
+          <span class="guardian-source">${sourceLabel(s.source)}</span>
+        </div>
+        <div class="guardian-cmd">${escapeHTML(s.command)} ${s.args.map(a => escapeHTML(a)).join(' ')}</div>
+        ${issueList ? `<div class="guardian-issues">${issueList}</div>` : '<div class="guardian-clean">No issues</div>'}
+      </div>`;
+  }).join('');
+
+  const issueCount = servers.reduce((sum, s) => sum + s.issues.length, 0);
+  const riskyCount = servers.filter(s => s.trust === 'risky').length;
+
+  return `
+    <div class="section-label" style="margin-top:24px;">MY MCP SERVERS</div>
+    <div class="guardian-summary">
+      <span class="guardian-stat">${servers.length} server${servers.length !== 1 ? 's' : ''}</span>
+      ${issueCount > 0 ? `<span class="guardian-stat warn">${issueCount} issue${issueCount !== 1 ? 's' : ''}</span>` : ''}
+      ${riskyCount > 0 ? `<span class="guardian-stat risky">${riskyCount} risky</span>` : ''}
+    </div>
+    <div class="guardian-list">${serverCards}</div>`;
 }
 
 function buildShell(content: string): string {
@@ -895,6 +947,126 @@ function buildShell(content: string): string {
     border-radius: 3px;
     animation: flowDown 4s linear infinite;
     opacity: 0.5;
+  }
+
+  /* -- Config Guardian -- */
+
+  .guardian-summary {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 10px;
+    font-family: 'SF Mono', monospace;
+  }
+
+  .guardian-stat {
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  .guardian-stat.warn { color: var(--kern-orange); }
+  .guardian-stat.risky { color: var(--kern-red); }
+
+  .guardian-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .guardian-server {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    animation: fadeSlideIn 0.4s ease-out both;
+  }
+
+  .guardian-server-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  .guardian-trust {
+    font-size: 8px;
+    line-height: 1;
+  }
+
+  .guardian-trust.verified { color: var(--kern-green); }
+  .guardian-trust.unknown { color: var(--kern-orange); }
+  .guardian-trust.risky { color: var(--kern-red); }
+
+  .guardian-server-name {
+    font-family: 'SF Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .guardian-source {
+    margin-left: auto;
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    background: rgba(255,255,255,0.04);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .guardian-cmd {
+    font-family: 'SF Mono', monospace;
+    font-size: 9px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 4px;
+  }
+
+  .guardian-issues {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 6px;
+  }
+
+  .guardian-issue {
+    font-size: 10px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .guardian-issue.bug {
+    background: rgba(239, 68, 68, 0.08);
+    color: var(--kern-red);
+  }
+
+  .guardian-issue.warn {
+    background: rgba(249, 115, 22, 0.08);
+    color: var(--kern-orange);
+  }
+
+  .guardian-issue.info {
+    background: rgba(161, 161, 170, 0.06);
+    color: var(--text-muted);
+  }
+
+  .guardian-issue-icon {
+    flex-shrink: 0;
+    font-size: 10px;
+  }
+
+  .guardian-clean {
+    font-size: 9px;
+    color: var(--kern-green);
+    margin-top: 4px;
   }
 
   /* -- Footer -- */

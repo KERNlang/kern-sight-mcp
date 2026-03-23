@@ -4,9 +4,10 @@ import * as path from 'path';
 import type { ReviewFinding } from '@kernlang/review-mcp';
 import { McpSecuritySidebarProvider } from './review-panel';
 import type { McpReviewResult } from './review-panel';
-import { McpSecurityCodeActionProvider, SAFE_AUTOFIXES, SAFE_AUTOFIX_RULES } from './code-actions';
+import { McpSecurityCodeActionProvider, SAFE_AUTOFIXES, PYTHON_AUTOFIXES, ALL_AUTOFIX_RULES } from './code-actions';
 import { initConfig, getConfig } from './config';
 import type { SecurityScore } from './score';
+import { ConfigGuardian } from './config-guardian';
 
 const SUPPORTED_LANGUAGES = new Set([
   'typescript', 'typescriptreact', 'javascript', 'javascriptreact', 'python',
@@ -40,7 +41,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // Register sidebar
     sidebarProvider = new McpSecuritySidebarProvider(context);
-    sidebarProvider.safeFixRules = SAFE_AUTOFIX_RULES;
+    sidebarProvider.safeFixRules = ALL_AUTOFIX_RULES;
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(McpSecuritySidebarProvider.viewType, sidebarProvider),
     );
@@ -59,7 +60,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
     sidebarProvider.onApplyFixRequested = (filePath, line, ruleId) => {
       void (async () => {
-        const fixFn = SAFE_AUTOFIXES[ruleId];
+        const isPy = filePath.endsWith('.py');
+        const fixFn = isPy ? PYTHON_AUTOFIXES[ruleId] : SAFE_AUTOFIXES[ruleId];
         if (!fixFn) return;
         const uri = vscode.Uri.file(filePath);
         const doc = await vscode.workspace.openTextDocument(uri);
@@ -83,6 +85,14 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // Init project config (.mcpsecurityrc.json)
     initConfig(context);
+
+    // Config Guardian — scans MCP config files for secrets/supply-chain issues
+    const configGuardian = new ConfigGuardian();
+    configGuardian.onUpdate = (servers) => {
+      sidebarProvider.updateConfigGuardian(servers);
+    };
+    void configGuardian.init(context);
+    context.subscriptions.push(configGuardian);
 
     // Code actions (quick fixes)
     const codeActionProvider = new McpSecurityCodeActionProvider();
