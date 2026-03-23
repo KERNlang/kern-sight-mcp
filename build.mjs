@@ -13,6 +13,7 @@ const shared = {
 const configs = [
   { ...shared, entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js' },
   { ...shared, entryPoints: ['src/worker.ts'], outfile: 'dist/worker.js' },
+  { ...shared, external: [], entryPoints: ['src/cli.ts'], outfile: 'dist/cli.js' },
 ];
 
 if (watch) {
