@@ -2,7 +2,7 @@
 
 **Find vulnerabilities in your MCP servers before your AI agent goes live.**
 
-Static analysis security scanner for [Model Context Protocol](https://modelcontextprotocol.io) servers. 11 rules mapped to the [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/). TypeScript + Python. VS Code extension + CLI + GitHub Action.
+Static analysis security scanner for [Model Context Protocol](https://modelcontextprotocol.io) servers. 13 rules mapped to the [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/). TypeScript + Python. VS Code extension + CLI + GitHub Action.
 
 Powered by [KERN](https://kernlang.dev) — the structural language for AI-generated code.
 
@@ -29,7 +29,7 @@ Every MCP server gets a security score based on four weighted metrics:
 
 Grades: **A** (90+), **B** (75+), **C** (60+), **D** (40+), **F** (<40)
 
-### 11 Security Rules (OWASP MCP Top 10)
+### 13 Security Rules (OWASP MCP Top 10)
 
 | Rule | OWASP | What it catches |
 |------|-------|-----------------|
@@ -42,6 +42,8 @@ Grades: **A** (90+), **B** (75+), **C** (60+), **D** (40+), **F** (<40)
 | `mcp-missing-auth` | #07 | HTTP/SSE server without auth |
 | `mcp-typosquatting` | #08 | Suspicious package name similarity |
 | `mcp-data-injection` | #09 | Hidden instructions in string literals |
+| `mcp-ssrf` | #02 | Server-side request forgery via unvalidated URLs |
+| `mcp-secret-leakage` | #04 | Secrets leaking into tool responses |
 | `mcp-ir-unguarded-effect` | Structural | Effects without guards (KERN IR) |
 | `mcp-ir-low-confidence` | Structural | Low guard/effect ratio |
 

@@ -267,6 +267,9 @@ function buildFindingHTML(f: ReviewFinding, index: number, result: McpReviewResu
   const severityClass = f.severity === 'error' ? 'bug' : f.severity === 'warning' ? 'warn' : 'info';
   const severityLabel = f.severity === 'error' ? 'BUG' : f.severity === 'warning' ? 'WARN' : 'INFO';
   const delay = index * 0.12;
+  const conf = (f as any).confidence as number | undefined;
+  const confPercent = conf != null ? Math.round(conf * 100) : null;
+  const confClass = confPercent != null ? (confPercent >= 80 ? 'high' : confPercent >= 50 ? 'mid' : 'low') : '';
 
   const actionBtns: string[] = [];
   const hasSafeFix = safeFixRules?.has(f.ruleId);
@@ -288,6 +291,7 @@ function buildFindingHTML(f: ReviewFinding, index: number, result: McpReviewResu
         <span class="severity-badge ${severityClass}">${severityLabel}</span>
         <span class="rule-id">${escapeHTML(f.ruleId)}</span>
         <span class="line-ref">L${line}</span>
+        ${confPercent != null ? `<span class="finding-confidence ${confClass}">${confPercent}%</span>` : ''}
         <span class="jump-hint">&#8599;</span>
       </div>
       <p class="finding-message">${escapeHTML(f.message)}</p>
@@ -790,6 +794,18 @@ function buildShell(content: string): string {
     border-radius: 3px;
     flex-shrink: 0;
   }
+
+  .finding-confidence {
+    font-family: 'SF Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+
+  .finding-confidence.high { background: rgba(34, 197, 94, 0.1); color: var(--kern-green); }
+  .finding-confidence.mid { background: rgba(249, 115, 22, 0.1); color: var(--kern-orange); }
+  .finding-confidence.low { background: rgba(239, 68, 68, 0.1); color: var(--kern-red); }
 
   .jump-hint {
     font-size: 9px;

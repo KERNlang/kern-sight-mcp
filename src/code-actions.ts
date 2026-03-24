@@ -133,6 +133,46 @@ export const SAFE_AUTOFIXES: Record<string, AutofixFn> = {
 
     return null;
   },
+
+  // SSRF → add URL allowlist guard
+  'mcp-ssrf': (document, line) => {
+    const lineText = document.lineAt(line).text;
+    const indent = getIndent(lineText);
+    const edit = new vscode.WorkspaceEdit();
+
+    const paramMatch = lineText.match(/\b(?:fetch|axios|got|request|http)\w*\s*[.(]\s*(\w+)/);
+    const varName = paramMatch?.[1] || 'url';
+
+    const guard = [
+      `${indent}// SECURITY: Validate URL against allowlist to prevent SSRF`,
+      `${indent}const allowedHosts = ['api.example.com'];`,
+      `${indent}const parsedUrl = new URL(${varName});`,
+      `${indent}if (!allowedHosts.includes(parsedUrl.hostname)) {`,
+      `${indent}  throw new Error('SSRF blocked: ' + parsedUrl.hostname);`,
+      `${indent}}`,
+    ].join('\n') + '\n';
+
+    edit.insert(document.uri, new vscode.Position(line, 0), guard);
+    return edit;
+  },
+
+  // Secret leakage in response → redact before returning
+  'mcp-secret-leakage': (document, line) => {
+    const lineText = document.lineAt(line).text;
+    const indent = getIndent(lineText);
+    const edit = new vscode.WorkspaceEdit();
+
+    const guard = [
+      `${indent}// SECURITY: Strip secrets from response before returning to LLM`,
+      `${indent}// function redactSecrets(obj) {`,
+      `${indent}//   const sensitiveKeys = /api[_-]?key|secret|token|password|auth/i;`,
+      `${indent}//   return JSON.parse(JSON.stringify(obj, (k, v) => sensitiveKeys.test(k) ? '[REDACTED]' : v));`,
+      `${indent}// }`,
+    ].join('\n') + '\n';
+
+    edit.insert(document.uri, new vscode.Position(line, 0), guard);
+    return edit;
+  },
 };
 
 // ── Python-specific autofixes ────────────────────────────────────────
@@ -259,6 +299,46 @@ export const PYTHON_AUTOFIXES: Record<string, AutofixFn> = {
     }
 
     return null;
+  },
+
+  // SSRF → add URL allowlist guard
+  'mcp-ssrf': (document, line) => {
+    const lineText = document.lineAt(line).text;
+    const indent = getIndent(lineText);
+    const edit = new vscode.WorkspaceEdit();
+
+    const paramMatch = lineText.match(/\b(?:requests|httpx|aiohttp|urllib)\.\w+\s*\(\s*(\w+)/);
+    const varName = paramMatch?.[1] || 'url';
+
+    const guard = [
+      `${indent}# SECURITY: Validate URL against allowlist to prevent SSRF`,
+      `${indent}from urllib.parse import urlparse`,
+      `${indent}allowed_hosts = ["api.example.com"]`,
+      `${indent}parsed = urlparse(${varName})`,
+      `${indent}if parsed.hostname not in allowed_hosts:`,
+      `${indent}    raise ValueError(f"SSRF blocked: {parsed.hostname}")`,
+    ].join('\n') + '\n';
+
+    edit.insert(document.uri, new vscode.Position(line, 0), guard);
+    return edit;
+  },
+
+  // Secret leakage in response → redact before returning
+  'mcp-secret-leakage': (document, line) => {
+    const lineText = document.lineAt(line).text;
+    const indent = getIndent(lineText);
+    const edit = new vscode.WorkspaceEdit();
+
+    const guard = [
+      `${indent}# SECURITY: Strip secrets from response before returning to LLM`,
+      `${indent}# import re, json`,
+      `${indent}# SENSITIVE_PATTERN = re.compile(r'api[_-]?key|secret|token|password|auth', re.I)`,
+      `${indent}# def redact_secrets(obj):`,
+      `${indent}#     return {k: "[REDACTED]" if SENSITIVE_PATTERN.search(k) else v for k, v in obj.items()}`,
+    ].join('\n') + '\n';
+
+    edit.insert(document.uri, new vscode.Position(line, 0), guard);
+    return edit;
   },
 };
 
