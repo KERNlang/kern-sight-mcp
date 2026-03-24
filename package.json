@@ -1,7 +1,7 @@
 {
   "name": "kern-mcp-security",
-  "displayName": "KERN MCP Security",
-  "description": "Security scanner for MCP (Model Context Protocol) servers — 11 rules, OWASP MCP Top 10",
+  "displayName": "MCP Security Scanner — OWASP Rules for MCP Servers",
+  "description": "Static analysis security scanner for MCP (Model Context Protocol) servers. 11 rules mapped to OWASP MCP Top 10. Detects command injection, path traversal, missing auth, secrets exposure, prompt injection. TypeScript + Python. CLI + GitHub Action + VS Code sidebar.",
   "version": "0.1.0",
   "publisher": "kernlang",
   "license": "SEE LICENSE IN LICENSE",
@@ -19,15 +19,22 @@
   },
   "categories": [
     "Linters",
-    "Programming Languages"
+    "Testing",
+    "Other"
   ],
   "keywords": [
     "mcp",
     "model context protocol",
     "security",
     "scanner",
+    "linter",
+    "static analysis",
     "prompt injection",
-    "owasp"
+    "owasp",
+    "claude",
+    "cursor",
+    "ai security",
+    "vulnerability"
   ],
   "activationEvents": [
     "onLanguage:typescript",
