@@ -187,4 +187,4 @@ Tested against the [official MCP servers](https://github.com/modelcontextprotoco
 
 ## License
 
-MIT
+AGPL-3.0 — Free for individuals and open-source projects. Commercial use requires a license. See [LICENSE](LICENSE).
