@@ -124,7 +124,11 @@
         "kernMcpSecurity.severity": {
           "type": "string",
           "default": "all",
-          "enum": ["all", "errors", "warnings"],
+          "enum": [
+            "all",
+            "errors",
+            "warnings"
+          ],
           "description": "Minimum severity level to show"
         }
       }
@@ -141,11 +145,11 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.24.0",
     "esbuild": "^0.20.0",
-    "typescript": "^5.4.0",
-    "@vscode/vsce": "^2.24.0"
+    "typescript": "^5.4.0"
   },
   "dependencies": {
-    "@kernlang/review-mcp": "^0.1.0"
+    "@kernlang/review-mcp": "^3.1.2"
   }
 }
