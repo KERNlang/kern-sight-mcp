@@ -64,7 +64,8 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
     if (!this._view) return;
     // Don't clear sidebar if we already have results — avoids flicker on re-scan
     if (this._current) return;
-    this._view.webview.html = buildLoadingHTML();
+    const animations = vscode.workspace.getConfiguration('kernMcpSecurity').get<boolean>('animations', true);
+    this._view.webview.html = buildLoadingHTML(animations);
   }
 
   update(result: McpReviewResult): void {
@@ -85,10 +86,11 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
 
   private _render(): void {
     if (!this._view) return;
+    const animations = vscode.workspace.getConfiguration('kernMcpSecurity').get<boolean>('animations', true);
     if (this._current) {
-      this._view.webview.html = buildReviewHTML(this._current, this.safeFixRules, this._configServers);
+      this._view.webview.html = buildReviewHTML(this._current, this.safeFixRules, this._configServers, animations);
     } else {
-      this._view.webview.html = buildNotMcpHTML(this._configServers);
+      this._view.webview.html = buildNotMcpHTML(this._configServers, animations);
     }
     this._view.show?.(true);
   }
@@ -118,17 +120,20 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
 
 // ── HTML builders ─────────────────────────────────────────────────────
 
-function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<string>, configServers?: import('./config-guardian').McpServerEntry[]): string {
+function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<string>, configServers?: import('./config-guardian').McpServerEntry[], animations = true): string {
   const { fileName, findings, irNodes, lang } = result;
   const bugs = findings.filter((f) => f.severity === 'error');
   const warnings = findings.filter((f) => f.severity === 'warning');
   const info = findings.filter((f) => f.severity === 'info');
 
-  const langBadge = lang === 'typescript'
-    ? '<span class="lang-badge ts">TypeScript</span>'
-    : lang === 'python'
-      ? '<span class="lang-badge py">Python</span>'
-      : '';
+  const isJS = fileName.endsWith('.js') || fileName.endsWith('.jsx');
+  const langLabel = lang === 'typescript'
+    ? (isJS ? 'JavaScript' : 'TypeScript')
+    : lang === 'python' ? 'Python' : '';
+  const langClass = lang === 'python' ? 'py' : 'ts';
+  const langBadge = langLabel
+    ? `<span class="lang-badge ${langClass}">${langLabel}</span>`
+    : '';
 
   const serverName = extractServerName(result);
 
@@ -163,23 +168,23 @@ function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<string>, co
     ${configServers && configServers.length > 0 ? buildConfigGuardianSection(configServers) : ''}
 
     <div class="footer"><span class="brand-kern-sm">KERN</span> <span class="brand-mcp-sm">MCP</span> · <a href="https://kernlang.dev" style="color:var(--text-muted);text-decoration:none;border-bottom:1px solid var(--border);">kernlang.dev</a></div>
-  `);
+  `, { animations });
 }
 
 function buildScoreHero(score: SecurityScore): string {
   const color = gradeColor(score.grade);
-  const circumference = 2 * Math.PI * 42;
+  const circumference = 2 * Math.PI * 34;
   const dashLength = (score.total / 100) * circumference;
 
   return `
     <div class="score-hero">
       <div class="score-ring-container">
-        <svg width="96" height="96" viewBox="0 0 96 96">
-          <circle cx="48" cy="48" r="42" fill="none" stroke="var(--border)" stroke-width="4"/>
-          <circle cx="48" cy="48" r="42" fill="none" stroke="${color}" stroke-width="4"
+        <svg width="76" height="76" viewBox="0 0 76 76">
+          <circle cx="38" cy="38" r="34" fill="none" stroke="var(--border)" stroke-width="3.5"/>
+          <circle cx="38" cy="38" r="34" fill="none" stroke="${color}" stroke-width="3.5"
             stroke-dasharray="${dashLength} ${circumference}"
-            stroke-linecap="round" transform="rotate(-90 48 48)"
-            style="transition: stroke-dasharray 1s ease-out"/>
+            stroke-linecap="round" transform="rotate(-90 38 38)"
+            class="score-arc"/>
         </svg>
         <div class="score-number" style="color:${color}">${score.total}</div>
       </div>
@@ -311,7 +316,7 @@ function extractServerName(result: McpReviewResult): string {
   return result.fileName;
 }
 
-function buildLoadingHTML(): string {
+function buildLoadingHTML(animations = true): string {
   return buildShell(`
     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;gap:20px;">
       <div class="scanner">
@@ -324,17 +329,17 @@ function buildLoadingHTML(): string {
       </div>
       <div style="font-size:11px;color:#525252;letter-spacing:0.1em;text-transform:uppercase;font-weight:600;font-family:'SF Mono',monospace;">Scanning<span class="scan-dots"></span></div>
     </div>
-  `);
+  `, { animations });
 }
 
-function buildNotMcpHTML(configServers?: import('./config-guardian').McpServerEntry[]): string {
+function buildNotMcpHTML(configServers?: import('./config-guardian').McpServerEntry[], animations = true): string {
   return buildShell(`
     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 16px;text-align:center;gap:16px;">
       <div class="header-brand"><span class="kern">KE<span class="kern-underline"></span>RN</span> <span class="mcp">MCP</span></div>
       <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;max-width:260px;">This file is not an MCP server.<br><br>Open a file that imports<br><code style="font-size:11px;color:var(--kern-orange);background:rgba(249,115,22,0.1);padding:2px 6px;border-radius:3px;">@modelcontextprotocol/sdk</code><br>or<br><code style="font-size:11px;color:var(--kern-orange);background:rgba(249,115,22,0.1);padding:2px 6px;border-radius:3px;">mcp.server</code></p>
     </div>
     ${configServers && configServers.length > 0 ? buildConfigGuardianSection(configServers) : ''}
-  `);
+  `, { animations });
 }
 
 function buildConfigGuardianSection(servers: import('./config-guardian').McpServerEntry[]): string {
@@ -381,7 +386,8 @@ function buildConfigGuardianSection(servers: import('./config-guardian').McpServ
     <div class="guardian-list">${serverCards}</div>`;
 }
 
-function buildShell(content: string): string {
+function buildShell(content: string, options?: { animations?: boolean }): string {
+  const noAnim = options?.animations === false;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -469,8 +475,8 @@ function buildShell(content: string): string {
   .score-hero {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 16px;
+    gap: 12px;
+    padding: 12px;
     margin-bottom: 16px;
     background: var(--surface);
     border: 1px solid var(--border);
@@ -480,9 +486,17 @@ function buildShell(content: string): string {
 
   .score-ring-container {
     position: relative;
-    width: 96px;
-    height: 96px;
+    width: 76px;
+    height: 76px;
     flex-shrink: 0;
+  }
+
+  .score-arc {
+    transition: stroke-dasharray 1s ease-out;
+  }
+
+  .no-animations .score-arc {
+    transition: none;
   }
 
   .score-number {
@@ -490,7 +504,7 @@ function buildShell(content: string): string {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 28px;
+    font-size: 24px;
     font-weight: 900;
     font-family: 'SF Mono', 'Fira Code', monospace;
     font-variant-numeric: tabular-nums;
@@ -528,14 +542,14 @@ function buildShell(content: string): string {
   }
 
   .metric-label {
-    width: 62px;
+    width: 52px;
     color: var(--text-secondary);
     font-weight: 600;
     flex-shrink: 0;
   }
 
   .metric-weight {
-    width: 22px;
+    width: 20px;
     color: var(--text-muted);
     font-size: 8px;
     flex-shrink: 0;
@@ -1165,9 +1179,19 @@ function buildShell(content: string): string {
   @keyframes corePulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.4); } }
   @keyframes sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   @keyframes dots { 0% { content: ''; } 33% { content: '.'; } 66% { content: '..'; } 100% { content: '...'; } }
+
+  /* -- No-animation mode -- */
+  .no-animations,
+  .no-animations * {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    transition-duration: 0s !important;
+  }
+  .no-animations .flow-rail-energy { display: none; }
+  .no-animations .pulse-ring { display: none; }
 </style>
 </head>
-<body>
+<body class="${noAnim ? 'no-animations' : ''}">
 
 <div class="flow-rail"><div class="flow-rail-bg"></div><div class="flow-rail-energy"></div></div>
 

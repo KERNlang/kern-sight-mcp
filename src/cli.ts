@@ -28,6 +28,16 @@ import type { SecurityScore } from './score';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Read version from package.json at build time (esbuild inlines this)
+const PKG_VERSION: string = (() => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'));
+    return pkg.version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+})();
+
 // ── Arg parsing ──────────────────────────────────────────────────────
 
 interface CliArgs {
@@ -71,6 +81,12 @@ function parseArgs(argv: string[]): CliArgs {
       args.lock = true;
     } else if (arg === '--verify') {
       args.verify = true;
+    } else if (arg === '--help' || arg === '-h') {
+      printHelp();
+      process.exit(0);
+    } else if (arg === '--version' || arg === '-V') {
+      console.log(`kern-mcp-security ${PKG_VERSION}`);
+      process.exit(0);
     } else if (!arg.startsWith('-')) {
       args.paths.push(arg);
     }
@@ -81,6 +97,33 @@ function parseArgs(argv: string[]): CliArgs {
   return args;
 }
 
+// ── Help ─────────────────────────────────────────────────────────────
+
+function printHelp(): void {
+  console.log(`kern-mcp-security ${PKG_VERSION} — MCP server security scanner
+
+Usage:
+  kern-mcp-security [options] [path]
+
+Options:
+  --threshold N   Minimum score to pass (exit 1 if below)
+  --format fmt    Output: text | json | sarif (default: text)
+  --output file   Write report to file (default: stdout)
+  --quiet, -q     Only output score + exit code
+  --scan-config   Scan MCP config files for secrets & misconfig
+  --lock          Generate .kern-mcp-lock.json (pin tool schemas)
+  --verify        Compare against lockfile, exit 1 on drift
+  --help, -h      Show this help
+  --version, -V   Show version
+
+Examples:
+  kern-mcp-security ./src/server.ts
+  kern-mcp-security --threshold 70 --format sarif --output report.sarif .
+  kern-mcp-security --scan-config
+  kern-mcp-security --lock ./src/server.ts
+  kern-mcp-security --verify ./src/server.ts`);
+}
+
 // ── SARIF output ────────────────────────────────────────────────────
 
 function toSARIF(result: WorkspaceScanResult): object {
@@ -88,7 +131,7 @@ function toSARIF(result: WorkspaceScanResult): object {
     tool: {
       driver: {
         name: 'KERN MCP Security',
-        version: '0.1.0',
+        version: PKG_VERSION,
         informationUri: 'https://github.com/KERNlang/kern-sight-mcp',
         rules: [] as object[],
       },

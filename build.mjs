@@ -8,11 +8,12 @@ const shared = {
   format: 'cjs',
   platform: 'node',
   sourcemap: true,
+  minify: !watch,
 };
 
 const configs = [
   { ...shared, entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js' },
-  { ...shared, entryPoints: ['src/worker.ts'], outfile: 'dist/worker.js' },
+  { ...shared, entryPoints: ['src/mcp-server.ts'], outfile: 'dist/mcp-server.js' },
   { ...shared, external: [], entryPoints: ['src/cli.ts'], outfile: 'dist/cli.js' },
 ];
 

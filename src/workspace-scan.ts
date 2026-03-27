@@ -7,9 +7,15 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+// Static import is intentional: esbuild bundles everything inline (external: [])
+// so a lazy require() provides zero runtime benefit. Runtime crashes from
+// inferMCP/reviewMCPSource/detectMCPServer are caught by try-catch at each call
+// site below. This differs from worker.ts which uses lazy require for its
+// two-stage fallback in the worker_threads isolation context.
 import { reviewMCPSource, inferMCP, detectMCPServer } from '@kernlang/review-mcp';
 import type { ReviewFinding } from '@kernlang/review-mcp';
 import { computeSecurityScore } from './score';
+import { runPostScan } from './post-scan';
 import type { SecurityScore, ToolScore } from './score';
 import type { McpReviewResult } from './review-panel';
 
@@ -80,6 +86,10 @@ export function scanWorkspace(workspaceRoot: string): WorkspaceScanResult {
     } catch {
       irNodes = [];
     }
+
+    // Post-scan: catch patterns that regex rules miss (base64, SSRF, unsanitized, obfuscation)
+    const postFindings = runPostScan(source, filePath) as unknown as ReviewFinding[];
+    findings.push(...postFindings);
 
     const score = computeSecurityScore(irNodes as any[], findings);
     results.push({

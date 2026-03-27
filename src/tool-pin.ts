@@ -79,8 +79,24 @@ export function generateLockFile(serverFile: string, irNodes: IRNode[]): LockFil
 
 /** Compare current state against existing lockfile. */
 export function verifyLockFile(lockPath: string, serverFile: string, irNodes: IRNode[]): PinDrift[] {
-  const raw = fs.readFileSync(lockPath, 'utf-8');
-  const lockFile: LockFile = JSON.parse(raw);
+  let raw: string;
+  try {
+    raw = fs.readFileSync(lockPath, 'utf-8');
+  } catch (err) {
+    return [{ toolName: '*', field: 'removed', message: `Cannot read lockfile: ${(err as Error).message}`, severity: 'error' }];
+  }
+
+  let lockFile: LockFile;
+  try {
+    lockFile = JSON.parse(raw);
+  } catch {
+    return [{ toolName: '*', field: 'removed', message: `Lockfile is not valid JSON: ${lockPath}`, severity: 'error' }];
+  }
+
+  if (!Array.isArray(lockFile.tools)) {
+    return [{ toolName: '*', field: 'removed', message: `Lockfile has no tools array: ${lockPath}`, severity: 'error' }];
+  }
+
   const drifts: PinDrift[] = [];
 
   const currentTools = extractTools(irNodes);

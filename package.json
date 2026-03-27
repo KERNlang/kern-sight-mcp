@@ -2,9 +2,9 @@
   "name": "kern-mcp-security",
   "displayName": "MCP Security Scanner — OWASP Rules for MCP Servers",
   "description": "Static analysis security scanner for MCP (Model Context Protocol) servers. 13 rules mapped to OWASP MCP Top 10. Detects command injection, path traversal, missing auth, secrets exposure, prompt injection. TypeScript + Python. CLI + GitHub Action + VS Code sidebar.",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "publisher": "kernlang",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "AGPL-3.0-or-later",
   "private": false,
   "icon": "media/icon.png",
   "bin": {
@@ -130,6 +130,11 @@
             "warnings"
           ],
           "description": "Minimum severity level to show"
+        },
+        "kernMcpSecurity.animations": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable sidebar animations (flow rail, pulse dots, transitions). Disable for a static UI."
         }
       }
     }
@@ -139,7 +144,7 @@
     "watch": "node build.mjs --watch",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "npx tsx test/score.test.ts",
+    "test": "npx tsx --test test/score.test.ts test/config-scan.test.ts test/tool-pin.test.ts",
     "lint": "tsc --noEmit"
   },
   "devDependencies": {
@@ -150,6 +155,6 @@
     "typescript": "^5.4.0"
   },
   "dependencies": {
-    "@kernlang/review-mcp": "^3.1.3"
+    "@kernlang/review-mcp": "^3.1.4"
   }
 }

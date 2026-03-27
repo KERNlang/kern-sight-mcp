@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { Worker } from 'worker_threads';
 import * as path from 'path';
 import type { ReviewFinding } from '@kernlang/review-mcp';
 import { McpSecuritySidebarProvider } from './review-panel';
@@ -8,6 +7,7 @@ import { McpSecurityCodeActionProvider, SAFE_AUTOFIXES, PYTHON_AUTOFIXES, ALL_AU
 import { initConfig, getConfig } from './config';
 import type { SecurityScore } from './score';
 import { ConfigGuardian } from './config-guardian';
+import { McpClient } from './mcp-client';
 
 const SUPPORTED_LANGUAGES = new Set([
   'typescript', 'typescriptreact', 'javascript', 'javascriptreact', 'python',
@@ -25,10 +25,8 @@ let outputChannel: vscode.OutputChannel;
 let statusBarItem: vscode.StatusBarItem;
 let sidebarProvider: McpSecuritySidebarProvider;
 let debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
-let activeWorkers = new Map<string, Worker>();
-let latestReviewRequest = new Map<string, number>();
-let reviewSequence = 0;
-const MAX_CONCURRENT_WORKERS = 3;
+let activeRequests = new Map<string, number>(); // URI key → JSON-RPC request ID
+let mcpClient: McpClient;
 
 export function activate(context: vscode.ExtensionContext): void {
   try {
@@ -38,6 +36,13 @@ export function activate(context: vscode.ExtensionContext): void {
     statusBarItem.command = 'kernMcpSecurity.showOutput';
     statusBarItem.show();
     updateStatusBar('idle', 0);
+
+    // Start MCP server
+    const serverPath = path.join(__dirname, 'mcp-server.js');
+    mcpClient = new McpClient(serverPath, (msg) => outputChannel.appendLine(msg));
+    mcpClient.start().catch((err) => {
+      outputChannel.appendLine(`[MCP Server] Start failed: ${err.message}`);
+    });
 
     // Register sidebar
     sidebarProvider = new McpSecuritySidebarProvider(context);
@@ -49,7 +54,7 @@ export function activate(context: vscode.ExtensionContext): void {
     sidebarProvider.onScanRequested = () => {
       const editor = vscode.window.activeTextEditor;
       if (editor && SUPPORTED_LANGUAGES.has(editor.document.languageId)) {
-        reviewDocument(editor.document);
+        void reviewDocument(editor.document);
       }
     };
 
@@ -78,7 +83,7 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.window.onDidChangeActiveTextEditor((editor) => {
         if (sidebarProvider.isJumping) return;
         if (editor && SUPPORTED_LANGUAGES.has(editor.document.languageId)) {
-          reviewDocument(editor.document);
+          void reviewDocument(editor.document);
         }
       }),
     );
@@ -114,7 +119,7 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
       vscode.commands.registerCommand('kernMcpSecurity.scanFile', () => {
         const editor = vscode.window.activeTextEditor;
-        if (editor) reviewDocument(editor.document);
+        if (editor) void reviewDocument(editor.document);
       }),
     );
 
@@ -181,15 +186,14 @@ export function activate(context: vscode.ExtensionContext): void {
     );
 
     context.subscriptions.push(
-      vscode.workspace.onDidSaveTextDocument((doc) => reviewDocument(doc)),
+      vscode.workspace.onDidSaveTextDocument((doc) => void reviewDocument(doc)),
     );
 
     context.subscriptions.push(
       vscode.workspace.onDidCloseTextDocument((doc) => {
         diagnosticCollection.delete(doc.uri);
         const key = doc.uri.toString();
-        cancelWorker(key);
-        latestReviewRequest.delete(key);
+        activeRequests.delete(key);
         const timer = debounceTimers.get(key);
         if (timer) clearTimeout(timer);
         debounceTimers.delete(key);
@@ -199,7 +203,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // Prime the sidebar for active editor
     const primeEditor = vscode.window.activeTextEditor;
     if (primeEditor && SUPPORTED_LANGUAGES.has(primeEditor.document.languageId)) {
-      reviewDocument(primeEditor.document);
+      void reviewDocument(primeEditor.document);
     }
 
     outputChannel.appendLine('KERN MCP Security activated');
@@ -222,23 +226,15 @@ function scheduleReview(document: vscode.TextDocument): void {
 
   debounceTimers.set(key, setTimeout(() => {
     debounceTimers.delete(key);
-    reviewDocument(document);
+    void reviewDocument(document);
   }, 800));
-}
-
-function cancelWorker(key: string): void {
-  const existing = activeWorkers.get(key);
-  if (existing) {
-    existing.terminate();
-    activeWorkers.delete(key);
-  }
 }
 
 function isActiveDocument(key: string): boolean {
   return vscode.window.activeTextEditor?.document.uri.toString() === key;
 }
 
-function reviewDocument(document: vscode.TextDocument): void {
+async function reviewDocument(document: vscode.TextDocument): Promise<void> {
   if (!SUPPORTED_LANGUAGES.has(document.languageId)) return;
 
   const config = getConfig();
@@ -246,135 +242,87 @@ function reviewDocument(document: vscode.TextDocument): void {
 
   const key = document.uri.toString();
   const version = document.version;
-
-  if (activeWorkers.size >= MAX_CONCURRENT_WORKERS && !activeWorkers.has(key)) return;
-
   const source = document.getText();
   const filePath = document.uri.fsPath;
   const uri = document.uri;
   const fileName = path.basename(filePath);
-  const requestId = ++reviewSequence;
 
-  latestReviewRequest.set(key, requestId);
-
-  // Cancel any in-flight worker for this file
-  cancelWorker(key);
+  // Track this request for superseding
+  const requestId = mcpClient.peekNextId();
+  activeRequests.set(key, requestId);
 
   if (isActiveDocument(key)) {
     updateStatusBar('analyzing', 0);
     sidebarProvider.showLoading();
   }
 
-  const workerPath = path.join(__dirname, 'worker.js');
-  const worker = new Worker(workerPath, {
-    workerData: { source, filePath },
-  });
-  activeWorkers.set(key, worker);
-  let didTimeout = false;
+  try {
+    const result = await mcpClient.callTool(source, filePath, 10000);
 
-  const finishWorker = (): void => {
-    clearTimeout(timeout);
-    if (activeWorkers.get(key) === worker) {
-      activeWorkers.delete(key);
-    }
-  };
-
-  // 10-second timeout
-  const timeout = setTimeout(() => {
-    didTimeout = true;
-    finishWorker();
-    worker.terminate();
-    if (latestReviewRequest.get(key) !== requestId) return;
-    if (isActiveDocument(key)) {
-      updateStatusBar('error', 0);
-    }
-    outputChannel.appendLine(`[${fileName}] Worker timeout (10s)`);
-  }, 10000);
-
-  worker.on('message', (msg: {
-    type: string;
-    findings?: ReviewFinding[];
-    irNodes?: IRNode[];
-    lang?: 'typescript' | 'python' | null;
-    score?: SecurityScore;
-    message?: string;
-  }) => {
-    if (msg.type === 'result') {
-      finishWorker();
-    }
-
-    if (latestReviewRequest.get(key) !== requestId) {
-      if (msg.type === 'result') {
-        outputChannel.appendLine(`[${fileName}] Discarded superseded result`);
-      }
+    // Check if superseded by a newer request for the same file
+    if (activeRequests.get(key) !== requestId) {
+      outputChannel.appendLine(`[${fileName}] Discarded superseded result`);
       return;
     }
 
-    // Stale result check
+    // Check if document changed while we were scanning
     const currentDoc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === key);
     if (!currentDoc || currentDoc.version !== version) {
-      if (msg.type === 'result') {
-        outputChannel.appendLine(`[${fileName}] Discarded stale result`);
+      outputChannel.appendLine(`[${fileName}] Discarded stale result`);
+      return;
+    }
+
+    const activeDoc = isActiveDocument(key);
+    const lang = result.lang;
+
+    if (!lang) {
+      diagnosticCollection.set(uri, []);
+      if (activeDoc) {
+        updateStatusBar('idle', 0);
+        sidebarProvider.showNotMcp();
       }
       return;
     }
 
-    if (msg.type === 'result' && msg.findings) {
-      const activeDoc = isActiveDocument(key);
-      const lang = msg.lang ?? null;
+    const findings = filterFindings(result.findings, config.severity);
+    const diagnostics = findings.map((f) => findingToDiagnostic(f, currentDoc));
+    diagnosticCollection.set(uri, diagnostics);
+    outputChannel.appendLine(`[${fileName}] ${findings.length} finding(s), ${(result.irNodes ?? []).length} IR nodes (${lang})`);
 
-      if (!lang) {
-        // Not an MCP server — clear diagnostics, but only update the sidebar if this file is active
-        diagnosticCollection.set(uri, []);
-        if (activeDoc) {
-          updateStatusBar('idle', 0);
-          sidebarProvider.showNotMcp();
-        }
-        return;
-      }
+    const reviewResult: McpReviewResult = {
+      fileName,
+      filePath,
+      findings,
+      irNodes: result.irNodes as IRNode[],
+      lang,
+      score: result.score,
+    };
 
-      const findings = filterFindings(msg.findings, config.severity);
-      const diagnostics = findings.map((f) => findingToDiagnostic(f, currentDoc));
-      diagnosticCollection.set(uri, diagnostics);
-      outputChannel.appendLine(`[${fileName}] ${findings.length} finding(s), ${(msg.irNodes ?? []).length} IR nodes (${lang})`);
-
-      const result: McpReviewResult = {
-        fileName,
-        filePath,
-        findings,
-        irNodes: msg.irNodes ?? [],
-        lang,
-        score: msg.score,
-      };
-      if (activeDoc) {
-        const scoreGrade = msg.score ? `${msg.score.grade}` : '';
-        updateStatusBar('done', findings.length, scoreGrade);
-        sidebarProvider.update(result);
-      }
-    } else if (msg.type === 'error') {
-      // Log error but don't show "not MCP" — worker may still send a result after partial errors
-      outputChannel.appendLine(`[${fileName}] Analysis warning: ${msg.message}`);
+    if (activeDoc) {
+      const scoreGrade = result.score ? `${result.score.grade}` : '';
+      updateStatusBar('done', findings.length, scoreGrade);
+      sidebarProvider.update(reviewResult);
     }
-  });
+  } catch (err) {
+    // If superseded, silently ignore
+    if (activeRequests.get(key) !== requestId) return;
 
-  worker.on('error', (err) => {
-    finishWorker();
-    if (latestReviewRequest.get(key) !== requestId) return;
     if (isActiveDocument(key)) {
       updateStatusBar('error', 0);
     }
-    outputChannel.appendLine(`[${fileName}] Worker crash: ${err.message}`);
-    outputChannel.show();
-  });
+    outputChannel.appendLine(`[${fileName}] Analysis failed: ${err instanceof Error ? err.message : String(err)}`);
 
-  worker.on('exit', (code) => {
-    finishWorker();
-    if (didTimeout || latestReviewRequest.get(key) !== requestId || code === 0) return;
-    if (isActiveDocument(key)) {
-      updateStatusBar('error', 0);
+    // Restart server if it crashed
+    if (!mcpClient.isRunning()) {
+      outputChannel.appendLine('[MCP Server] Crashed — restarting...');
+      try {
+        await mcpClient.restart();
+        outputChannel.appendLine('[MCP Server] Restarted successfully');
+      } catch (restartErr) {
+        outputChannel.appendLine(`[MCP Server] Restart failed: ${restartErr instanceof Error ? restartErr.message : String(restartErr)}`);
+      }
     }
-    outputChannel.appendLine(`[${fileName}] Worker exited with code ${code}`);
-  });
+  }
 }
 
 function updateStatusBar(state: 'idle' | 'analyzing' | 'done' | 'error', count: number, grade?: string): void {
@@ -450,8 +398,6 @@ export function deactivate(): void {
     clearTimeout(timer);
   }
   debounceTimers.clear();
-  for (const worker of activeWorkers.values()) {
-    worker.terminate();
-  }
-  activeWorkers.clear();
+  activeRequests.clear();
+  mcpClient?.stop();
 }

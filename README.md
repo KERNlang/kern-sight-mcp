@@ -6,7 +6,7 @@ Static analysis security scanner for [Model Context Protocol](https://modelconte
 
 Powered by [KERN](https://kernlang.dev) — the structural language for AI-generated code.
 
-<!-- ![Screenshot](media/screenshot.png) -->
+![MCP Security Scanner — VS Code sidebar with security score, KERN IR tree, and vulnerability findings](media/screenshot.png)
 
 ## Why
 
@@ -68,13 +68,25 @@ The sidebar renders your MCP server's security structure as a tree:
 
 ### Config Guardian
 
-Scans your MCP configuration files (`claude_desktop_config.json`, `.cursor/mcp.json`, `.vscode/mcp.json`) for:
+Scans your MCP configuration files (`claude_desktop_config.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `.windsurf/mcp.json`) for:
 - Hardcoded secrets (Shannon entropy + pattern detection)
 - Missing version pins on `npx`/`uvx` packages (supply chain risk)
+- `@latest` treated as error — it's NOT a version pin
 - Wide permission flags (`--allow-all`, `--no-sandbox`)
 - Unresolvable command paths
 
 Shows a "My MCP Servers" section in the sidebar with trust indicators.
+
+### Tool Pinning (Rug-Pull Detection)
+
+Pin your MCP server's tool schemas to detect unauthorized changes:
+
+```bash
+kern-mcp-security --lock ./src/server.ts     # generate lockfile
+kern-mcp-security --verify ./src/server.ts   # check for drift
+```
+
+Detects: removed tools, new tools, description changes (tool poisoning), schema changes.
 
 ### Badge + README Integration
 
@@ -91,11 +103,15 @@ Writes a badge, per-tool score table, and JSON report to your README between `<!
 Scan from the command line — works in CI without VS Code:
 
 ```bash
-npx kern-mcp-security ./src/server.ts                           # text output
-npx kern-mcp-security --format json --output report.json .      # JSON report
-npx kern-mcp-security --format sarif --output report.sarif .    # SARIF for GitHub Code Scanning
-npx kern-mcp-security --threshold 70 .                          # exit 1 if score < 70
-npx kern-mcp-security --quiet .                                 # just "A 95"
+kern-mcp-security ./src/server.ts                           # text output
+kern-mcp-security --format json --output report.json .      # JSON report
+kern-mcp-security --format sarif --output report.sarif .    # SARIF for GitHub Code Scanning
+kern-mcp-security --threshold 70 .                          # exit 1 if score < 70
+kern-mcp-security --quiet .                                 # just "A 95"
+kern-mcp-security --scan-config                             # scan MCP config files
+kern-mcp-security --lock .                                  # pin tool schemas
+kern-mcp-security --verify .                                # check for drift
+kern-mcp-security --help                                    # full usage
 ```
 
 ### Output formats
@@ -131,7 +147,7 @@ Features:
 ## VS Code Usage
 
 1. Install the extension
-2. Open an MCP server file (TypeScript or Python)
+2. Open an MCP server file (TypeScript, JavaScript, or Python)
 3. The sidebar shows score, IR tree, and findings
 4. Click any finding to jump to the line
 5. Use `Cmd+Shift+M` / `Ctrl+Shift+M` to scan manually
@@ -143,6 +159,7 @@ Features:
 |---------|---------|-------------|
 | `kernMcpSecurity.enabled` | `true` | Enable/disable scanning |
 | `kernMcpSecurity.severity` | `"all"` | Filter: `all`, `errors`, `warnings` |
+| `kernMcpSecurity.animations` | `true` | Enable sidebar animations (flow rail, pulse dots) |
 
 Project-level config via `.mcpsecurityrc.json`:
 
@@ -183,7 +200,7 @@ Tested against the [official MCP servers](https://github.com/modelcontextprotoco
 
 - [KERN Language](https://kernlang.dev) — the structural language powering the analysis
 - [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/) — the security framework we map to
-- [Report Issues](https://github.com/KERNlang/kern-sight-mcp/issues)
+- [Contact](mailto:hello@kernlang.dev) — bug reports, feature requests, commercial licensing
 
 ## License
 

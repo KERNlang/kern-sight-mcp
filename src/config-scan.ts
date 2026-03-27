@@ -146,12 +146,16 @@ function analyzeConfig(raw: string, source: string, configPath: string): McpServ
     // Missing version pins (npx)
     if (/\bnpx\b/.test(command) || args.some(a => /\bnpx\b/.test(a))) {
       const fullCmd = [command, ...args].join(' ');
-      if (!/@\d/.test(fullCmd) && !/@latest/.test(fullCmd)) {
+      const hasExactPin = /@\d/.test(fullCmd) && !/@latest\b/.test(fullCmd);
+      if (!hasExactPin) {
+        const isLatest = /@latest\b/.test(fullCmd);
         issues.push({
           type: 'missing-version-pin',
-          severity: 'warning',
-          message: 'npx package without version pin — supply chain risk',
-          detail: 'Use npx package@1.2.3 instead of npx package',
+          severity: isLatest ? 'error' : 'warning',
+          message: isLatest
+            ? 'npx package@latest is NOT a version pin — resolves to whatever is current'
+            : 'npx package without version pin — supply chain risk',
+          detail: 'Use npx package@1.2.3 instead of npx package or npx package@latest',
         });
       }
     }
@@ -159,11 +163,15 @@ function analyzeConfig(raw: string, source: string, configPath: string): McpServ
     // Missing version pins (uvx)
     if (/\buvx\b/.test(command) || args.some(a => /\buvx\b/.test(a))) {
       const fullCmd = [command, ...args].join(' ');
-      if (!/==/.test(fullCmd) && !/@/.test(fullCmd)) {
+      const hasUvxPin = /==\d/.test(fullCmd) || (/@\d/.test(fullCmd) && !/@latest\b/.test(fullCmd));
+      if (!hasUvxPin) {
+        const isLatest = /@latest\b/.test(fullCmd);
         issues.push({
           type: 'missing-version-pin',
-          severity: 'warning',
-          message: 'uvx package without version pin — supply chain risk',
+          severity: isLatest ? 'error' : 'warning',
+          message: isLatest
+            ? 'uvx package@latest is NOT a version pin — resolves to whatever is current'
+            : 'uvx package without version pin — supply chain risk',
           detail: 'Use uvx package==1.2.3 instead of uvx package',
         });
       }
