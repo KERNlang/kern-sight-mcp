@@ -10,6 +10,9 @@
  *   --format fmt    Output format: json | sarif | text (default: text)
  *   --output file   Write report to file (default: stdout)
  *   --quiet         Only output score + exit code
+ *   --scan-config   Scan MCP config files for security issues
+ *   --lock          Generate .kern-mcp-lock.json (pin tool schemas)
+ *   --verify        Compare against lockfile, exit 1 on drift
  *
  * Examples:
  *   node dist/cli.js ./src/server.ts
@@ -19,6 +22,8 @@
 
 import { scanWorkspace, type WorkspaceScanResult } from './workspace-scan';
 import { generateReportJSON } from './badge';
+import { scanMcpConfigs, type ConfigScanResult } from './config-scan';
+import { generateLockFile, verifyLockFile, type PinDrift } from './tool-pin';
 import type { SecurityScore } from './score';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -31,6 +36,9 @@ interface CliArgs {
   format: 'json' | 'sarif' | 'text';
   output: string | null;
   quiet: boolean;
+  scanConfig: boolean;
+  lock: boolean;
+  verify: boolean;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -40,6 +48,9 @@ function parseArgs(argv: string[]): CliArgs {
     format: 'text',
     output: null,
     quiet: false,
+    scanConfig: false,
+    lock: false,
+    verify: false,
   };
 
   let i = 2; // skip node + script
@@ -54,6 +65,12 @@ function parseArgs(argv: string[]): CliArgs {
       args.output = argv[++i];
     } else if (arg === '--quiet' || arg === '-q') {
       args.quiet = true;
+    } else if (arg === '--scan-config') {
+      args.scanConfig = true;
+    } else if (arg === '--lock') {
+      args.lock = true;
+    } else if (arg === '--verify') {
+      args.verify = true;
     } else if (!arg.startsWith('-')) {
       args.paths.push(arg);
     }
@@ -153,13 +170,124 @@ function toText(result: WorkspaceScanResult): string {
   return lines.join('\n');
 }
 
+// ── Config scan output ───────────────────────────────────────────────
+
+function configScanToText(result: ConfigScanResult): string {
+  const lines: string[] = [];
+
+  lines.push('KERN MCP Config Scan');
+  lines.push(`  Configs found: ${result.configsScanned.length}`);
+  lines.push(`  Servers:       ${result.servers.length}`);
+  lines.push(`  Issues:        ${result.totalIssues}`);
+  lines.push('');
+
+  if (result.configsScanned.length === 0) {
+    lines.push('No MCP configuration files found.');
+    return lines.join('\n');
+  }
+
+  for (const configPath of result.configsScanned) {
+    lines.push(`Config: ${configPath}`);
+    const serversInConfig = result.servers.filter(s => s.configPath === configPath);
+    for (const server of serversInConfig) {
+      const trustIcon = server.trust === 'verified' ? 'OK' : server.trust === 'unknown' ? '??' : '!!';
+      lines.push(`  [${trustIcon}] ${server.name} (${server.command})`);
+      for (const issue of server.issues) {
+        const sev = issue.severity === 'error' ? 'ERR ' : issue.severity === 'warning' ? 'WARN' : 'INFO';
+        lines.push(`       [${sev}] ${issue.message}`);
+      }
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n').trimEnd();
+}
+
 // ── Main ────────────────────────────────────────────────────────────
 
 function main(): void {
   const args = parseArgs(process.argv);
+
+  if (args.scanConfig) {
+    const workspaceRoot = args.paths[0] !== '.' ? path.resolve(args.paths[0]) : process.cwd();
+    const result = scanMcpConfigs(workspaceRoot);
+
+    let output: string;
+    if (args.format === 'json') {
+      output = JSON.stringify(result, null, 2);
+    } else {
+      output = configScanToText(result);
+    }
+
+    if (args.output) {
+      fs.writeFileSync(args.output, output + '\n', 'utf-8');
+      if (!args.quiet) console.log(`Report written to ${args.output}`);
+    } else if (!args.quiet) {
+      console.log(output);
+    } else {
+      const errors = result.servers.reduce((n, s) => n + s.issues.filter(i => i.severity === 'error').length, 0);
+      console.log(`issues:${result.totalIssues} errors:${errors}`);
+    }
+
+    if (result.servers.some(s => s.issues.some(i => i.severity === 'error'))) {
+      process.exit(1);
+    }
+    return;
+  }
+
   const scanPath = path.resolve(args.paths[0]);
 
   const result = scanWorkspace(scanPath);
+
+  // ── Tool pinning: --lock ────────────────────────────────────────────
+  if (args.lock) {
+    let totalPinned = 0;
+    for (const file of result.files) {
+      const lockFile = generateLockFile(file.filePath, file.irNodes);
+      const lockPath = path.join(path.dirname(file.filePath), '.kern-mcp-lock.json');
+      fs.writeFileSync(lockPath, JSON.stringify(lockFile, null, 2) + '\n', 'utf-8');
+      totalPinned += lockFile.tools.length;
+      if (!args.quiet) {
+        console.log(`Lockfile generated: ${lockPath} (${lockFile.tools.length} tools pinned)`);
+      }
+    }
+    if (result.files.length === 0 && !args.quiet) {
+      console.log('No MCP server files found — no lockfile generated.');
+    }
+  }
+
+  // ── Tool pinning: --verify ──────────────────────────────────────────
+  if (args.verify) {
+    let hasErrors = false;
+    let anyLockFound = false;
+
+    for (const file of result.files) {
+      const lockPath = path.join(path.dirname(file.filePath), '.kern-mcp-lock.json');
+      if (!fs.existsSync(lockPath)) continue;
+      anyLockFound = true;
+
+      const drifts = verifyLockFile(lockPath, file.filePath, file.irNodes);
+      if (drifts.length === 0) {
+        if (!args.quiet) console.log(`Tool pinning OK: ${file.fileName} (no drift)`);
+        continue;
+      }
+
+      console.log('Tool pinning drift detected:');
+      for (const d of drifts) {
+        const tag = d.severity === 'error' ? '[ERROR]' : '[WARN] ';
+        console.log(`  ${tag} ${d.message}`);
+        if (d.severity === 'error') hasErrors = true;
+      }
+    }
+
+    if (!anyLockFound && !args.quiet) {
+      console.log('No .kern-mcp-lock.json found — run with --lock first.');
+    }
+
+    if (hasErrors) {
+      process.exit(1);
+    }
+  }
 
   let output: string;
   if (args.format === 'sarif') {
