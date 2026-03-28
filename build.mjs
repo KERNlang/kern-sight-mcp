@@ -14,7 +14,6 @@ const shared = {
 const configs = [
   { ...shared, entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js' },
   { ...shared, entryPoints: ['src/mcp-server.ts'], outfile: 'dist/mcp-server.js' },
-  { ...shared, external: [], entryPoints: ['src/cli.ts'], outfile: 'dist/cli.js' },
 ];
 
 if (watch) {

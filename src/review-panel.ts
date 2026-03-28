@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { ReviewFinding } from '@kernlang/review-mcp';
-import type { SecurityScore } from './score';
-import { gradeColor } from './score';
+import type { SecurityScore } from '@kernlang/review-mcp';
+import { gradeColor } from '@kernlang/review-mcp';
 
 interface IRNode {
   type: string;

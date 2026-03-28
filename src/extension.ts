@@ -5,7 +5,7 @@ import { McpSecuritySidebarProvider } from './review-panel';
 import type { McpReviewResult } from './review-panel';
 import { McpSecurityCodeActionProvider, SAFE_AUTOFIXES, PYTHON_AUTOFIXES, ALL_AUTOFIX_RULES } from './code-actions';
 import { initConfig, getConfig } from './config';
-import type { SecurityScore } from './score';
+import type { SecurityScore } from '@kernlang/review-mcp';
 import { ConfigGuardian } from './config-guardian';
 import { McpClient } from './mcp-client';
 
@@ -143,8 +143,7 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         // Lazy imports — these pull in @kernlang/review-mcp (ts-morph) which must NOT load at activation
-        const { scanWorkspace } = require('./workspace-scan') as typeof import('./workspace-scan');
-        const { generateReportJSON, updateReadme } = require('./badge') as typeof import('./badge');
+        const { scanWorkspace, generateReportJSON, updateReadme } = require('@kernlang/review-mcp') as typeof import('@kernlang/review-mcp');
         const fs = require('fs') as typeof import('fs');
 
         const root = folder.uri.fsPath;

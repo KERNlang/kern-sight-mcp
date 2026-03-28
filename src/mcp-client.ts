@@ -7,7 +7,7 @@
 
 import { spawn, type ChildProcess } from 'child_process';
 import type { ReviewFinding } from '@kernlang/review-mcp';
-import type { SecurityScore } from './score';
+import type { SecurityScore } from '@kernlang/review-mcp';
 
 // ── Types ────────────────────────────────────────────────────────────
 

@@ -7,8 +7,6 @@
  */
 
 import * as readline from 'readline';
-import { computeSecurityScore } from './score';
-import { runPostScan } from './post-scan';
 import type { ReviewFinding } from '@kernlang/review-mcp';
 
 // ── Lazy-load @kernlang/review-mcp (same two-stage strategy as old worker.ts) ──
@@ -16,17 +14,23 @@ import type { ReviewFinding } from '@kernlang/review-mcp';
 let detectMCPServer: typeof import('@kernlang/review-mcp').detectMCPServer;
 let reviewMCPSource: typeof import('@kernlang/review-mcp').reviewMCPSource;
 let inferMCP: typeof import('@kernlang/review-mcp').inferMCP | null = null;
+let computeSecurityScore: typeof import('@kernlang/review-mcp').computeSecurityScore;
+let runPostScan: typeof import('@kernlang/review-mcp').runPostScan;
 
 try {
   const mod = require('@kernlang/review-mcp');
   detectMCPServer = mod.detectMCPServer;
   reviewMCPSource = mod.reviewMCPSource;
   inferMCP = mod.inferMCP;
+  computeSecurityScore = mod.computeSecurityScore;
+  runPostScan = mod.runPostScan;
 } catch {
   try {
     const mod = require('@kernlang/review-mcp');
     detectMCPServer = mod.detectMCPServer;
     reviewMCPSource = mod.reviewMCPSource;
+    computeSecurityScore = mod.computeSecurityScore;
+    runPostScan = mod.runPostScan;
   } catch (err) {
     process.stderr.write(`[mcp-server] Fatal: cannot load @kernlang/review-mcp: ${err}\n`);
     process.exit(1);

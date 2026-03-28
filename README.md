@@ -37,13 +37,13 @@ Grades: **A** (90+), **B** (75+), **C** (60+), **D** (40+), **F** (<40)
 | `mcp-path-traversal` | #02 | File ops with unvalidated paths |
 | `mcp-tool-poisoning` | #03 | Hidden instructions in tool descriptions |
 | `mcp-secrets-exposure` | #04 | Hardcoded keys/tokens in server code |
-| `mcp-unsanitized-response` | #05 | Raw external data returned to LLM |
+| `mcp-unsanitized-response` | #05 | Raw external data / XML returned to LLM |
 | `mcp-missing-validation` | #06 | Tool params used without validation |
 | `mcp-missing-auth` | #07 | HTTP/SSE server without auth |
 | `mcp-typosquatting` | #08 | Suspicious package name similarity |
 | `mcp-data-injection` | #09 | Hidden instructions in string literals |
 | `mcp-ssrf` | #02 | Server-side request forgery via unvalidated URLs |
-| `mcp-secret-leakage` | #04 | Secrets leaking into tool responses |
+| `mcp-secret-leakage` | #04 | Secrets, system info, IP disclosure in responses |
 | `mcp-ir-unguarded-effect` | Structural | Effects without guards (KERN IR) |
 | `mcp-ir-low-confidence` | Structural | Low guard/effect ratio |
 
@@ -100,25 +100,13 @@ Writes a badge, per-tool score table, and JSON report to your README between `<!
 
 ## CLI
 
-Scan from the command line — works in CI without VS Code:
-
 ```bash
-kern-mcp-security ./src/server.ts                           # text output
-kern-mcp-security --format json --output report.json .      # JSON report
-kern-mcp-security --format sarif --output report.sarif .    # SARIF for GitHub Code Scanning
-kern-mcp-security --threshold 70 .                          # exit 1 if score < 70
-kern-mcp-security --quiet .                                 # just "A 95"
-kern-mcp-security --scan-config                             # scan MCP config files
-kern-mcp-security --lock .                                  # pin tool schemas
-kern-mcp-security --verify .                                # check for drift
-kern-mcp-security --help                                    # full usage
+npx @kernlang/review-mcp ./src/server.ts
 ```
 
-### Output formats
+Options: `--format json|sarif|text`, `--threshold 60` (fail if below), `--quiet`, `--output report.json`.
 
-- **text** — human-readable score + findings
-- **json** — structured report with per-tool scores
-- **sarif** — [SARIF 2.1.0](https://sarifweb.azurewebsites.net/) for GitHub Code Scanning integration
+See [@kernlang/review-mcp](https://github.com/KERNlang/kern-lang/tree/main/packages/review-mcp) for full CLI docs.
 
 ## GitHub Action
 
@@ -132,17 +120,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: KERNlang/kern-sight-mcp/ci@main
+      - uses: KERNlang/kern-lang/packages/review-mcp/ci@main
         with:
           threshold: 60        # fail if score < 60
           sarif: true          # upload to GitHub Code Scanning
-          comment: true        # post score to PR comments
+          comment: true        # post score + findings to PR
 ```
 
-Features:
-- Score + grade in check output
-- SARIF upload to GitHub Code Scanning tab
-- Auto-updating PR comment with score badge and per-tool breakdown
+Outputs: `score`, `grade`, `findings`. See [CI action source](https://github.com/KERNlang/kern-lang/tree/main/packages/review-mcp/ci) for all inputs.
+
+## Contact
+
+- CLI / CI / docs: [kernlang.dev](https://kernlang.dev)
+- Email: hello@kernlang.dev
 
 ## VS Code Usage
 
@@ -172,23 +162,24 @@ Project-level config via `.mcpsecurityrc.json`:
 
 ## Architecture
 
-All analysis runs in **worker threads** — the editor stays fast. The engine combines:
+The extension spawns a lightweight MCP subprocess for analysis — the editor stays fast. The engine combines three layers:
 
-- **Regex-based rules** — fast pattern matching for known vulnerability patterns
-- **KERN IR inference** — translates MCP server code to KERN's intermediate representation, then checks structural invariants (effects must have guards)
+1. **Legacy regex rules** — fast pattern matching for known vulnerability patterns
+2. **Compiled `.kern` rules** — declarative, human-auditable rules with taint tracking and guard dependencies
+3. **KERN IR inference** — translates MCP server code to KERN's intermediate representation, checks structural invariants (effects must have guards)
 
 No network calls. No telemetry. Everything runs locally.
 
 ## Real-World Results
 
-Tested against the [official MCP servers](https://github.com/modelcontextprotocol/servers) and a lab of 10 intentionally vulnerable servers:
+Tested against the [official MCP servers](https://github.com/modelcontextprotocol/servers) and the [vulnerable-mcp-servers-lab](https://github.com/ApseccoApps/vulnerable-mcp-servers-lab):
 
-| Test Suite | Servers | Score | Findings |
-|------------|---------|-------|----------|
-| Official MCP (filesystem, git, memory, fetch, time) | 7 | A (99) | 37 |
-| Vulnerable MCP lab (intentional vulns) | 11 | C (70) | 52 |
+| Test Suite | Servers | Findings |
+|------------|---------|----------|
+| Official MCP (filesystem, git, memory, fetch, time) | 7 | 37 |
+| Vulnerable MCP lab (7 intentional vuln servers) | 7 | 50 |
 
-10 of 11 rules triggered. The scanner correctly identifies path traversal in the official filesystem server and command injection, missing auth, secrets exposure, and prompt injection markers in vulnerable servers.
+All 7 lab servers detected. Catches command injection (eval), hardcoded secrets, prompt injection, data injection markers, SSRF, unsanitized external data, missing auth on remote servers, system info disclosure, typosquatting, and rug-pull patterns.
 
 ## Requirements
 
