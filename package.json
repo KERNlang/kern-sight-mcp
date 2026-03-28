@@ -3,7 +3,7 @@
   "displayName": "MCP Security Scanner — OWASP Rules for MCP Servers",
   "description": "Static analysis security scanner for MCP (Model Context Protocol) servers. 13 rules mapped to OWASP MCP Top 10. Detects command injection, path traversal, missing auth, secrets exposure, prompt injection. TypeScript + Python. CLI + GitHub Action + VS Code sidebar.",
   "version": "1.0.0",
-  "publisher": "kernlang",
+  "publisher": "KERNlang",
   "license": "AGPL-3.0-or-later",
   "private": false,
   "icon": "media/icon.png",
@@ -34,6 +34,7 @@
     "vulnerability"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onLanguage:typescript",
     "onLanguage:javascript",
     "onLanguage:python",
