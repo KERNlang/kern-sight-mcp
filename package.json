@@ -153,6 +153,6 @@
     "typescript": "^5.4.0"
   },
   "dependencies": {
-    "@kernlang/review-mcp": "^3.1.4"
+    "@kernlang/review-mcp": "^3.1.5"
   }
 }

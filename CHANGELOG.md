@@ -25,7 +25,7 @@ First stable release.
 - Correct language badges (JavaScript vs TypeScript)
 
 ### CLI
-- `npx kern-mcp-security` — scan from command line
+- `npx @kernlang/review-mcp` — scan from command line
 - Output formats: text, JSON, SARIF 2.1.0
 - `--threshold N` — CI quality gate
 - `--scan-config` — scan MCP configuration files

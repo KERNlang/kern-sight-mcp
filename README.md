@@ -2,7 +2,7 @@
 
 **Find vulnerabilities in your MCP servers before your AI agent goes live.**
 
-Static analysis security scanner for [Model Context Protocol](https://modelcontextprotocol.io) servers. 13 rules mapped to the [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/). TypeScript + Python. VS Code extension + CLI + GitHub Action.
+Static analysis security scanner for [Model Context Protocol](https://modelcontextprotocol.io) servers. 13 rules mapped to the [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/). TypeScript + Python. Extension for VS Code and compatible editors (Cursor, Windsurf, Antigravity) + CLI + GitHub Action.
 
 Powered by [KERN](https://kernlang.dev) — the structural language for AI-generated code.
 
@@ -134,7 +134,9 @@ Outputs: `score`, `grade`, `findings`. See [CI action source](https://github.com
 - CLI / CI / docs: [kernlang.dev](https://kernlang.dev)
 - Email: hello@kernlang.dev
 
-## VS Code Usage
+## Usage
+
+Works in VS Code, Cursor, Windsurf, Antigravity, and other compatible editors.
 
 1. Install the extension
 2. Open an MCP server file (TypeScript, JavaScript, or Python)
@@ -183,7 +185,7 @@ All 7 lab servers detected. Catches command injection (eval), hardcoded secrets,
 
 ## Requirements
 
-- VS Code 1.85+ (for the extension)
+- VS Code 1.85+ or compatible editor (Cursor, Windsurf, Antigravity)
 - Node.js 18+ (for the CLI)
 - MCP servers using `@modelcontextprotocol/sdk` (TypeScript) or `mcp.server` / `FastMCP` (Python)
 
@@ -195,4 +197,4 @@ All 7 lab servers detected. Catches command injection (eval), hardcoded secrets,
 
 ## License
 
-AGPL-3.0 — Free for individuals and open-source projects. Commercial use requires a license. See [LICENSE](LICENSE).
+Part of the [KERN](https://github.com/KERNlang/kern) project. AGPL-3.0 — free for individuals and open-source projects. Commercial use requires a license. See [LICENSE](https://github.com/KERNlang/kern/blob/main/LICENSE).
