@@ -92,7 +92,6 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
     } else {
       this._view.webview.html = buildNotMcpHTML(this._configServers, animations);
     }
-    this._view.show?.(true);
   }
 
   private _jumpToFile(filePath: string, line: number, col: number): void {
