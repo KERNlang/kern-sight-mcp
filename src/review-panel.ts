@@ -25,10 +25,19 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
   private _current: McpReviewResult | null = null;
   private _jumping = false;
   private _configServers: import('./config-guardian').McpServerEntry[] = [];
+  private _mode: 'review' | 'build' = 'review';
   public safeFixRules: Set<string> = new Set();
   public onScanRequested?: () => void;
   public onCopySuggestionRequested?: (suggestion: string) => void;
   public onApplyFixRequested?: (filePath: string, line: number, ruleId: string) => void;
+  public onCompileRequested?: (target: 'typescript' | 'python') => void;
+  public onValidateRequested?: () => void;
+  public onCreateKernRequested?: () => void;
+  public onGenerateRequested?: (description: string, selectedContextIds: string[], engineId?: string) => void;
+  public onScanContextRequested?: () => void;
+  public onModeChanged?: (mode: 'review' | 'build') => void;
+  public onImportToKernRequested?: () => void;
+  public onConvertTargetRequested?: () => void;
 
   constructor(private readonly _context: vscode.ExtensionContext) {}
 
@@ -56,6 +65,25 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
         this.onCopySuggestionRequested?.(msg.suggestion);
       } else if (msg.type === 'applyFix') {
         this.onApplyFixRequested?.(msg.filePath, msg.line, msg.ruleId);
+      } else if (msg.type === 'compileMCP') {
+        this.onCompileRequested?.(msg.target);
+      } else if (msg.type === 'validateKern') {
+        this.onValidateRequested?.();
+      } else if (msg.type === 'createKern') {
+        this.onCreateKernRequested?.();
+      } else if (msg.type === 'generate') {
+        this.onGenerateRequested?.(msg.description, msg.contextIds, msg.engineId);
+      } else if (msg.type === 'scanContext') {
+        this.onScanContextRequested?.();
+      } else if (msg.type === 'importToKern') {
+        this.onImportToKernRequested?.();
+      } else if (msg.type === 'convertTarget') {
+        this.onConvertTargetRequested?.();
+      } else if (msg.type === 'openSettings') {
+        void vscode.commands.executeCommand('workbench.action.openSettings', 'kernMcpSecurity.ai');
+      } else if (msg.type === 'switchMode') {
+        this._mode = msg.mode;
+        this.onModeChanged?.(msg.mode);
       }
     });
   }
@@ -77,6 +105,52 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
     this._current = null;
     if (!this._view) return;
     this._view.webview.html = buildNotMcpHTML();
+  }
+
+  showBuildMode(fileName: string, syntaxValid: boolean, errorMessage?: string): void {
+    this._current = null;
+    if (!this._view) return;
+    const animations = vscode.workspace.getConfiguration('kernMcpSecurity').get<boolean>('animations', true);
+    this._view.webview.html = buildBuildModeHTML(fileName, syntaxValid, errorMessage, animations);
+  }
+
+  showBuildResult(result: McpReviewResult, sourceFileName: string): void {
+    this._current = result;
+    if (!this._view) return;
+    const animations = vscode.workspace.getConfiguration('kernMcpSecurity').get<boolean>('animations', true);
+    this._view.webview.html = buildBuildResultHTML(result, sourceFileName, this.safeFixRules, this._configServers, animations);
+  }
+
+  showGenerateMode(contextItems: { id: string; label: string; category: string; preview: string }[], engines: { id: string; label: string; available: boolean }[]): void {
+    this._current = null;
+    if (!this._view) return;
+    const animations = vscode.workspace.getConfiguration('kernMcpSecurity').get<boolean>('animations', true);
+    this._view.webview.html = buildGenerateHTML(contextItems, engines, animations);
+  }
+
+  showGenerating(): void {
+    if (!this._view) return;
+    const animations = vscode.workspace.getConfiguration('kernMcpSecurity').get<boolean>('animations', true);
+    this._view.webview.html = buildGeneratingHTML(animations);
+  }
+
+  showImportMode(fileName: string, lang: 'typescript' | 'python'): void {
+    this._current = null;
+    if (!this._view) return;
+    const animations = vscode.workspace.getConfiguration('kernMcpSecurity').get<boolean>('animations', true);
+    this._view.webview.html = buildImportModeHTML(fileName, lang, animations);
+  }
+
+  showGenerateError(message: string, engineLabel: string): void {
+    if (!this._view) return;
+    const animations = vscode.workspace.getConfiguration('kernMcpSecurity').get<boolean>('animations', true);
+    this._view.webview.html = buildGenerateErrorHTML(message, engineLabel, animations);
+  }
+
+  showCompiling(fileName: string, target: string): void {
+    if (!this._view) return;
+    const animations = vscode.workspace.getConfiguration('kernMcpSecurity').get<boolean>('animations', true);
+    this._view.webview.html = buildCompilingHTML(fileName, target, animations);
   }
 
   updateConfigGuardian(servers: import('./config-guardian').McpServerEntry[]): void {
@@ -336,9 +410,252 @@ function buildNotMcpHTML(configServers?: import('./config-guardian').McpServerEn
     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 16px;text-align:center;gap:16px;">
       <div class="header-brand"><span class="kern">KE<span class="kern-underline"></span>RN</span> <span class="mcp">MCP</span></div>
       <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;max-width:260px;">This file is not an MCP server.<br><br>Open a file that imports<br><code style="font-size:11px;color:var(--kern-orange);background:rgba(249,115,22,0.1);padding:2px 6px;border-radius:3px;">@modelcontextprotocol/sdk</code><br>or<br><code style="font-size:11px;color:var(--kern-orange);background:rgba(249,115,22,0.1);padding:2px 6px;border-radius:3px;">mcp.server</code></p>
+      <a class="create-kern-link" onclick="vscode.postMessage({type:'createKern'})">or generate a .kern server with AI &rarr;</a>
     </div>
     ${configServers && configServers.length > 0 ? buildConfigGuardianSection(configServers) : ''}
   `, { animations });
+}
+
+// ── Build Mode HTML ─────────────────────────────────────────────────────
+
+function buildBuildModeHTML(fileName: string, syntaxValid: boolean, errorMessage?: string, animations = true): string {
+  const statusClass = syntaxValid ? 'valid' : 'error';
+  const statusText = syntaxValid ? 'Syntax: Valid' : 'Syntax: Error';
+  const statusIcon = syntaxValid ? '&#10003;' : '&#10007;';
+
+  return buildShell(`
+    <div class="server-header">
+      <div class="server-name">${escapeHTML(fileName)}</div>
+      <span class="lang-badge build">BUILD</span>
+    </div>
+
+    <div class="build-status ${statusClass}">
+      <span class="build-status-icon">${statusIcon}</span>
+      <span class="build-status-text">${statusText}</span>
+    </div>
+    ${errorMessage ? `<div class="build-error">${escapeHTML(errorMessage)}</div>` : ''}
+
+    <div class="build-actions">
+      <button class="build-btn" ${!syntaxValid ? 'disabled' : ''} onclick="vscode.postMessage({type:'compileMCP',target:'typescript'})">
+        <span class="build-btn-icon">&#9654;</span> Compile &rarr; TypeScript
+      </button>
+      <button class="build-btn" ${!syntaxValid ? 'disabled' : ''} onclick="vscode.postMessage({type:'compileMCP',target:'python'})">
+        <span class="build-btn-icon">&#9654;</span> Compile &rarr; Python
+      </button>
+    </div>
+
+    <div class="build-hint">
+      <span style="color:var(--text-muted);font-size:10px;">Compiled output is auto-reviewed with 13 OWASP MCP rules</span>
+    </div>
+
+    <div class="footer"><span class="brand-kern-sm">KERN</span> <span class="brand-mcp-sm">MCP</span> · <a href="https://kernlang.dev" style="color:var(--text-muted);text-decoration:none;border-bottom:1px solid var(--border);">kernlang.dev</a></div>
+  `, { animations, activeMode: 'build' });
+}
+
+function buildCompilingHTML(fileName: string, target: string, animations = true): string {
+  return buildShell(`
+    <div class="server-header">
+      <div class="server-name">${escapeHTML(fileName)}</div>
+      <span class="lang-badge build">BUILD</span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;gap:20px;">
+      <div class="scanner">
+        <div class="scanner-ring"></div>
+        <div class="scanner-ring scanner-ring-1"></div>
+        <div class="scanner-core"></div>
+        <div class="scanner-sweep"></div>
+      </div>
+      <div style="font-size:11px;color:#525252;letter-spacing:0.1em;text-transform:uppercase;font-weight:600;font-family:'SF Mono',monospace;">
+        Compiling &rarr; ${escapeHTML(target)}<span class="scan-dots"></span>
+      </div>
+    </div>
+  `, { animations, activeMode: 'build' });
+}
+
+function buildBuildResultHTML(result: McpReviewResult, sourceFileName: string, safeFixRules?: Set<string>, configServers?: import('./config-guardian').McpServerEntry[], animations = true): string {
+  const { findings } = result;
+  const bugs = findings.filter((f) => f.severity === 'error');
+  const warnings = findings.filter((f) => f.severity === 'warning');
+  const info = findings.filter((f) => f.severity === 'info');
+
+  const targetLabel = result.lang === 'python' ? 'Python' : 'TypeScript';
+
+  return buildShell(`
+    <div class="build-breadcrumb">
+      <span class="breadcrumb-source">${escapeHTML(sourceFileName)}</span>
+      <span class="breadcrumb-arrow">&rarr;</span>
+      <span class="breadcrumb-target">${escapeHTML(result.fileName)}</span>
+      <span class="lang-badge ${result.lang === 'python' ? 'py' : 'ts'}">${targetLabel}</span>
+    </div>
+
+    ${result.score ? buildScoreHero(result.score) : ''}
+
+    <div class="summary">
+      ${bugs.length > 0 ? `<div class="stat"><span class="stat-num bugs">${bugs.length}</span><span class="stat-label">Bug${bugs.length > 1 ? 's' : ''}</span></div>` : ''}
+      ${warnings.length > 0 ? `${bugs.length > 0 ? '<div class="divider"></div>' : ''}<div class="stat"><span class="stat-num warns">${warnings.length}</span><span class="stat-label">Warning${warnings.length > 1 ? 's' : ''}</span></div>` : ''}
+      ${info.length > 0 ? `${(bugs.length > 0 || warnings.length > 0) ? '<div class="divider"></div>' : ''}<div class="stat"><span class="stat-num infos">${info.length}</span><span class="stat-label">Note${info.length > 1 ? 's' : ''}</span></div>` : ''}
+      ${findings.length === 0 ? '<div class="stat"><span class="stat-num clean">0</span><span class="stat-label">Issues</span></div>' : ''}
+    </div>
+
+    ${findings.length === 0 ? '<div class="clean-state"><div class="check">&#10003;</div><p>Compiled output is clean.<br>No vulnerabilities found.</p></div>' : ''}
+
+    ${bugs.length > 0 ? '<div class="section-label" data-severity-section="error">Bugs</div>' : ''}
+    ${bugs.map((f, i) => buildFindingHTML(f, i, result, safeFixRules)).join('')}
+
+    ${warnings.length > 0 ? '<div class="section-label" data-severity-section="warning">Warnings</div>' : ''}
+    ${warnings.map((f, i) => buildFindingHTML(f, i + bugs.length, result)).join('')}
+
+    ${info.length > 0 ? '<div class="section-label" data-severity-section="info">Notes</div>' : ''}
+    ${info.map((f, i) => buildFindingHTML(f, i + bugs.length + warnings.length, result)).join('')}
+
+    ${configServers && configServers.length > 0 ? buildConfigGuardianSection(configServers) : ''}
+
+    <div class="footer"><span class="brand-kern-sm">KERN</span> <span class="brand-mcp-sm">MCP</span> · <a href="https://kernlang.dev" style="color:var(--text-muted);text-decoration:none;border-bottom:1px solid var(--border);">kernlang.dev</a></div>
+  `, { animations, activeMode: 'build' });
+}
+
+function buildGenerateHTML(contextItems: { id: string; label: string; category: string; preview: string }[], engines: { id: string; label: string; available: boolean }[], animations = true): string {
+  const categoryIcons: Record<string, string> = {
+    project: '&#128230;',
+    schema: '&#128451;',
+    api: '&#9889;',
+    env: '&#128273;',
+    kern: '&#9733;',
+    spec: '&#128196;',
+  };
+
+  const selected = engines.find(e => e.available) ?? engines[0];
+  const selectedLabel = selected?.label ?? 'No AI';
+
+  const engineOptions = engines.filter(e => e.available).map(e =>
+    `<div class="engine-option${e.id === selected?.id ? ' active' : ''}" data-engine="${escapeHTML(e.id)}">${escapeHTML(e.label)}</div>`
+  ).join('');
+
+  const contextList = contextItems.length > 0
+    ? contextItems.map(item => `
+        <label class="context-item">
+          <input type="checkbox" class="context-check" data-id="${escapeHTML(item.id)}" checked>
+          <span class="context-icon">${categoryIcons[item.category] ?? '&#128196;'}</span>
+          <span class="context-label">${escapeHTML(item.label)}</span>
+          <span class="context-preview">${escapeHTML(item.preview)}</span>
+        </label>`).join('')
+    : '<div style="color:var(--text-muted);font-size:11px;padding:8px 0;">No project context found. Describe your server below.</div>';
+
+  return buildShell(`
+    <div class="server-header">
+      <div class="server-name">Generate MCP Server</div>
+      <div class="engine-picker" id="engine-picker">
+        <button class="engine-badge" id="engine-badge" onclick="document.getElementById('engine-dropdown').classList.toggle('open')">
+          ${escapeHTML(selectedLabel)} <span class="engine-caret">&#9662;</span>
+        </button>
+        <div class="engine-dropdown" id="engine-dropdown">
+          ${engineOptions}
+          <div class="engine-divider"></div>
+          <div class="engine-option settings" onclick="vscode.postMessage({type:'openSettings'})">&#9881; AI Settings</div>
+        </div>
+      </div>
+    </div>
+
+    <input type="hidden" id="selected-engine" value="${escapeHTML(selected?.id ?? '')}">
+
+    <div class="section-label">PROJECT CONTEXT</div>
+    <div class="context-list">${contextList}</div>
+
+    <div class="section-label" style="margin-top:12px;">DESCRIBE YOUR SERVER</div>
+    <textarea id="gen-description" class="gen-textarea" placeholder="e.g. A Postgres CRUD server for users and posts, with JWT auth, rate limiting, and structured logging..." rows="5"></textarea>
+
+    <div class="build-actions" style="margin-top:12px;">
+      <button class="build-btn" id="gen-btn" onclick="
+        const desc = document.getElementById('gen-description').value;
+        const checks = document.querySelectorAll('.context-check:checked');
+        const ids = Array.from(checks).map(c => c.dataset.id);
+        const engineId = document.getElementById('selected-engine').value;
+        vscode.postMessage({type:'generate', description: desc, contextIds: ids, engineId: engineId});
+      ">
+        <span class="build-btn-icon">&#10024;</span> Generate .kern <span class="beta-tag">BETA</span>
+      </button>
+    </div>
+
+    <div class="footer"><span class="brand-kern-sm">KERN</span> <span class="brand-mcp-sm">MCP</span> · <a href="https://kernlang.dev" style="color:var(--text-muted);text-decoration:none;border-bottom:1px solid var(--border);">kernlang.dev</a></div>
+  `, { animations, activeMode: 'build' });
+}
+
+function buildGeneratingHTML(animations = true): string {
+  return buildShell(`
+    <div class="server-header">
+      <div class="server-name">Generate MCP Server</div>
+      <span class="lang-badge build">AI</span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;gap:20px;">
+      <div class="scanner">
+        <div class="scanner-ring"></div>
+        <div class="scanner-ring scanner-ring-1"></div>
+        <div class="scanner-ring scanner-ring-2"></div>
+        <div class="scanner-core"></div>
+        <div class="scanner-sweep"></div>
+      </div>
+      <div style="font-size:11px;color:#525252;letter-spacing:0.1em;text-transform:uppercase;font-weight:600;font-family:'SF Mono',monospace;">
+        Generating<span class="scan-dots"></span>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);max-width:200px;text-align:center;line-height:1.5;">
+        AI is writing your .kern MCP server with security guards...
+      </div>
+    </div>
+  `, { animations, activeMode: 'build' });
+}
+
+function buildImportModeHTML(fileName: string, lang: 'typescript' | 'python', animations = true): string {
+  const targetLabel = lang === 'python' ? 'TypeScript' : 'Python';
+
+  return buildShell(`
+    <div class="server-header">
+      <div class="server-name">${escapeHTML(fileName)}</div>
+      <span class="lang-badge ${lang === 'python' ? 'py' : 'ts'}">${lang === 'python' ? 'Python' : 'TypeScript'}</span>
+    </div>
+
+    <div class="build-actions">
+      <button class="build-btn" onclick="vscode.postMessage({type:'importToKern'})">
+        <span class="build-btn-icon">&#10024;</span> Import to .kern <span class="beta-tag">BETA</span>
+      </button>
+      <button class="build-btn" onclick="vscode.postMessage({type:'convertTarget'})">
+        <span class="build-btn-icon">&#8644;</span> Convert to ${escapeHTML(targetLabel)} <span class="beta-tag">BETA</span>
+      </button>
+    </div>
+
+    <div class="build-hint">
+      <span style="color:var(--text-muted);font-size:10px;">AI-assisted — review output before shipping</span>
+    </div>
+
+    <div class="footer"><span class="brand-kern-sm">KERN</span> <span class="brand-mcp-sm">MCP</span> · <a href="https://kernlang.dev" style="color:var(--text-muted);text-decoration:none;border-bottom:1px solid var(--border);">kernlang.dev</a></div>
+  `, { animations, activeMode: 'build' });
+}
+
+function buildGenerateErrorHTML(message: string, engineLabel: string, animations = true): string {
+  return buildShell(`
+    <div class="server-header">
+      <div class="server-name">Generate MCP Server</div>
+      <span class="lang-badge build">${escapeHTML(engineLabel)}</span>
+    </div>
+
+    <div class="gen-error-box">
+      <div class="gen-error-icon">&#10007;</div>
+      <div class="gen-error-title">Generation failed</div>
+      <div class="gen-error-msg">${escapeHTML(message)}</div>
+    </div>
+
+    <div class="build-actions">
+      <button class="build-btn" onclick="vscode.postMessage({type:'scanContext'})">
+        <span class="build-btn-icon">&#8592;</span> Try again
+      </button>
+      <button class="build-btn" style="border-color:var(--border);color:var(--text-muted);" onclick="vscode.postMessage({type:'openSettings'})">
+        <span class="build-btn-icon">&#9881;</span> AI Settings
+      </button>
+    </div>
+
+    <div class="footer"><span class="brand-kern-sm">KERN</span> <span class="brand-mcp-sm">MCP</span> · <a href="https://kernlang.dev" style="color:var(--text-muted);text-decoration:none;border-bottom:1px solid var(--border);">kernlang.dev</a></div>
+  `, { animations, activeMode: 'build' });
 }
 
 function buildConfigGuardianSection(servers: import('./config-guardian').McpServerEntry[]): string {
@@ -385,7 +702,7 @@ function buildConfigGuardianSection(servers: import('./config-guardian').McpServ
     <div class="guardian-list">${serverCards}</div>`;
 }
 
-function buildShell(content: string, options?: { animations?: boolean }): string {
+function buildShell(content: string, options?: { animations?: boolean; activeMode?: 'review' | 'build' }): string {
   const noAnim = options?.animations === false;
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1126,6 +1443,363 @@ function buildShell(content: string, options?: { animations?: boolean }): string
     -webkit-text-fill-color: transparent;
   }
 
+  /* -- Build Mode -- */
+
+  .build-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'SF Mono', monospace;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+  }
+
+  .build-status.valid {
+    background: rgba(34, 197, 94, 0.08);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    color: var(--kern-green);
+  }
+
+  .build-status.error {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: var(--kern-red);
+  }
+
+  .build-status-icon { font-size: 13px; }
+
+  .build-error {
+    font-size: 10px;
+    color: var(--kern-red);
+    background: rgba(239, 68, 68, 0.06);
+    padding: 8px 10px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+    font-family: 'SF Mono', monospace;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+
+  .build-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .build-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    border: 1px solid rgba(249, 115, 22, 0.3);
+    background: rgba(249, 115, 22, 0.06);
+    color: var(--kern-orange);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'SF Mono', monospace;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .build-btn:hover:not(:disabled) {
+    background: rgba(249, 115, 22, 0.12);
+    border-color: var(--kern-orange);
+  }
+
+  .build-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .build-btn-icon { font-size: 10px; }
+
+  .build-hint {
+    text-align: center;
+    margin-bottom: 16px;
+  }
+
+  .lang-badge.build {
+    background: rgba(249, 115, 22, 0.15);
+    color: var(--kern-orange);
+  }
+
+  .create-kern-link {
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-decoration: none;
+    border-bottom: 1px solid var(--border);
+    transition: color 0.2s;
+  }
+
+  .create-kern-link:hover {
+    color: var(--kern-orange);
+    border-bottom-color: var(--kern-orange);
+  }
+
+  /* -- Build Result Breadcrumb -- */
+
+  .build-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 0;
+    margin-bottom: 12px;
+    font-size: 11px;
+    font-family: 'SF Mono', monospace;
+  }
+
+  .breadcrumb-source {
+    color: var(--text-muted);
+  }
+
+  .breadcrumb-arrow {
+    color: var(--kern-orange);
+    font-size: 12px;
+  }
+
+  .breadcrumb-target {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  /* -- Mode Tabs -- */
+
+  .mode-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    margin: -16px -16px 12px -16px;
+    padding: 0 16px;
+    background: var(--surface);
+  }
+
+  .mode-tab {
+    flex: 1;
+    padding: 10px 0;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-family: 'SF Mono', monospace;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .mode-tab:hover {
+    color: var(--text-secondary);
+  }
+
+  .mode-tab.active {
+    color: var(--kern-orange);
+    border-bottom-color: var(--kern-orange);
+  }
+
+  /* -- Beta Tag -- */
+
+  .beta-tag {
+    font-size: 7px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(249, 115, 22, 0.15);
+    color: var(--kern-orange);
+    vertical-align: middle;
+    margin-left: 4px;
+  }
+
+  /* -- Engine Picker -- */
+
+  .engine-picker {
+    position: relative;
+  }
+
+  .engine-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(249, 115, 22, 0.15);
+    color: var(--kern-orange);
+    font-size: 10px;
+    font-weight: 700;
+    font-family: 'SF Mono', monospace;
+    letter-spacing: 0.03em;
+    border: 1px solid rgba(249, 115, 22, 0.25);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .engine-badge:hover {
+    background: rgba(249, 115, 22, 0.25);
+    border-color: var(--kern-orange);
+  }
+
+  .engine-caret {
+    font-size: 8px;
+    opacity: 0.7;
+  }
+
+  .engine-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 180px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px;
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .engine-dropdown.open {
+    display: block;
+  }
+
+  .engine-option {
+    padding: 7px 10px;
+    font-size: 11px;
+    font-family: 'SF Mono', monospace;
+    color: var(--text-secondary);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+
+  .engine-option:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+  }
+
+  .engine-option.active {
+    color: var(--kern-orange);
+  }
+
+  .engine-option.settings {
+    color: var(--text-muted);
+    font-size: 10px;
+  }
+
+  .engine-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+
+  /* -- Generate Error -- */
+
+  .gen-error-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 32px 16px;
+    gap: 8px;
+  }
+
+  .gen-error-icon {
+    font-size: 28px;
+    color: var(--kern-red);
+    margin-bottom: 4px;
+  }
+
+  .gen-error-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .gen-error-msg {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    max-width: 260px;
+    word-break: break-word;
+  }
+
+  /* -- Generate Mode -- */
+
+  .context-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 8px;
+  }
+
+  .context-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: background 0.15s;
+  }
+
+  .context-item:hover { background: var(--surface); }
+
+  .context-check {
+    accent-color: var(--kern-orange);
+    margin: 0;
+  }
+
+  .context-icon { font-size: 12px; flex-shrink: 0; }
+
+  .context-label {
+    color: var(--text);
+    font-family: 'SF Mono', monospace;
+    font-size: 10px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .context-preview {
+    color: var(--text-muted);
+    font-size: 9px;
+    flex-shrink: 0;
+  }
+
+  .gen-textarea {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 11px;
+    padding: 10px;
+    resize: vertical;
+    line-height: 1.5;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .gen-textarea:focus {
+    border-color: var(--kern-orange);
+  }
+
+  .gen-textarea::placeholder {
+    color: var(--text-muted);
+  }
+
   /* -- Filter bar -- */
 
   .filter-bar {
@@ -1192,14 +1866,19 @@ function buildShell(content: string, options?: { animations?: boolean }): string
 </head>
 <body class="${noAnim ? 'no-animations' : ''}">
 
+<div class="mode-tabs">
+  <button class="mode-tab ${options?.activeMode !== 'build' ? 'active' : ''}" data-mode="review">REVIEW</button>
+  <button class="mode-tab ${options?.activeMode === 'build' ? 'active' : ''}" data-mode="build">BUILD</button>
+</div>
+
 <div class="flow-rail"><div class="flow-rail-bg"></div><div class="flow-rail-energy"></div></div>
 
-<div class="filter-bar">
+${options?.activeMode !== 'build' ? `<div class="filter-bar">
   <button class="filter-btn active" data-filter="all">ALL</button>
   <button class="filter-btn" data-filter="error">BUGS</button>
   <button class="filter-btn" data-filter="warning">WARNINGS</button>
   <button class="filter-btn" data-filter="info">INFO</button>
-</div>
+</div>` : ''}
 
 <div id="content-container">
 ${content}
@@ -1238,6 +1917,32 @@ ${content}
       const col = parseInt(finding.dataset.col, 10) || 1;
       const filePath = finding.dataset.filepath || '';
       vscode.postMessage({ type: 'jumpToLine', line, col, filePath });
+      return;
+    }
+
+    // Engine picker
+    const engineOpt = e.target.closest('.engine-option:not(.settings)');
+    if (engineOpt) {
+      document.querySelectorAll('.engine-option').forEach(o => o.classList.remove('active'));
+      engineOpt.classList.add('active');
+      const badge = document.getElementById('engine-badge');
+      const hidden = document.getElementById('selected-engine');
+      if (badge) badge.innerHTML = engineOpt.textContent + ' <span class="engine-caret">&#9662;</span>';
+      if (hidden) hidden.value = engineOpt.dataset.engine;
+      document.getElementById('engine-dropdown')?.classList.remove('open');
+      return;
+    }
+
+    // Close dropdown on outside click
+    if (!e.target.closest('.engine-picker')) {
+      document.getElementById('engine-dropdown')?.classList.remove('open');
+    }
+
+    const modeTab = e.target.closest('.mode-tab');
+    if (modeTab) {
+      document.querySelectorAll('.mode-tab').forEach(b => b.classList.remove('active'));
+      modeTab.classList.add('active');
+      vscode.postMessage({ type: 'switchMode', mode: modeTab.dataset.mode });
       return;
     }
 

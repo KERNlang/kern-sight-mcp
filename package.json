@@ -1,8 +1,8 @@
 {
   "name": "kern-mcp-security",
-  "displayName": "MCP Security Scanner — OWASP Rules for MCP Servers",
-  "description": "Static analysis security scanner for MCP (Model Context Protocol) servers. 13 rules mapped to OWASP MCP Top 10. Detects command injection, path traversal, missing auth, secrets exposure, prompt injection. TypeScript + Python. CLI + GitHub Action + VS Code sidebar.",
-  "version": "1.0.0",
+  "displayName": "KERN MCP — Build, Review & Secure MCP Servers",
+  "description": "Write .kern, compile to secure MCP servers (TypeScript + Python), auto-review with 13 OWASP MCP rules. Inline diagnostics, security scoring, quick fixes. Command injection, path traversal, missing auth, secrets exposure, prompt injection detection. Build + scan in one tool.",
+  "version": "1.1.0",
   "publisher": "KERNlang",
   "license": "AGPL-3.0-or-later",
   "private": false,
@@ -22,15 +22,29 @@
   "keywords": [
     "mcp",
     "model context protocol",
+    "mcp server",
+    "mcp security",
+    "mcp build",
+    "mcp compiler",
+    "mcp scanner",
+    "mcp lint",
+    "mcp linter",
+    "kern",
     "security",
     "scanner",
     "linter",
     "static analysis",
-    "prompt injection",
+    "compiler",
+    "code generator",
+    "build",
     "owasp",
+    "prompt injection",
+    "ai security",
     "claude",
     "cursor",
-    "ai security",
+    "windsurf",
+    "copilot",
+    "ai tools",
     "vulnerability"
   ],
   "activationEvents": [
@@ -38,6 +52,7 @@
     "onLanguage:typescript",
     "onLanguage:javascript",
     "onLanguage:python",
+    "onLanguage:kern",
     "onView:kernMcpSecurity.sidebar"
   ],
   "main": "./dist/extension.js",
@@ -78,6 +93,30 @@
       {
         "command": "kernMcpSecurity.generateBadge",
         "title": "KERN: Generate MCP Security Badge"
+      },
+      {
+        "command": "kernMcpSecurity.compileMCP",
+        "title": "KERN: Compile .kern to MCP Server"
+      },
+      {
+        "command": "kernMcpSecurity.compileMCPPython",
+        "title": "KERN: Compile .kern to MCP Server (Python)"
+      },
+      {
+        "command": "kernMcpSecurity.validateKern",
+        "title": "KERN: Validate .kern Syntax"
+      },
+      {
+        "command": "kernMcpSecurity.generateMCP",
+        "title": "KERN: Generate MCP Server with AI"
+      },
+      {
+        "command": "kernMcpSecurity.importToKern",
+        "title": "KERN: Import MCP Server to .kern"
+      },
+      {
+        "command": "kernMcpSecurity.convertTarget",
+        "title": "KERN: Convert MCP Server (TS ↔ Python)"
       }
     ],
     "keybindings": [
@@ -86,6 +125,21 @@
         "key": "ctrl+shift+m",
         "mac": "cmd+shift+m",
         "when": "editorTextFocus"
+      }
+    ],
+    "languages": [
+      {
+        "id": "kern",
+        "extensions": [".kern"],
+        "aliases": ["KERN", "kern"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "kern",
+        "scopeName": "source.kern",
+        "path": "./syntaxes/kern.tmLanguage.json"
       }
     ],
     "menus": {
@@ -101,12 +155,42 @@
           "command": "kernMcpSecurity.scanFile",
           "group": "navigation",
           "when": "resourceLangId == typescript || resourceLangId == javascript || resourceLangId == python"
+        },
+        {
+          "command": "kernMcpSecurity.compileMCP",
+          "group": "navigation",
+          "when": "resourceLangId == kern"
         }
       ],
       "editor/context": [
         {
           "command": "kernMcpSecurity.scanFile",
           "group": "kern",
+          "when": "resourceLangId == typescript || resourceLangId == javascript || resourceLangId == python"
+        },
+        {
+          "command": "kernMcpSecurity.compileMCP",
+          "group": "kern@1",
+          "when": "resourceLangId == kern"
+        },
+        {
+          "command": "kernMcpSecurity.compileMCPPython",
+          "group": "kern@2",
+          "when": "resourceLangId == kern"
+        },
+        {
+          "command": "kernMcpSecurity.validateKern",
+          "group": "kern@3",
+          "when": "resourceLangId == kern"
+        },
+        {
+          "command": "kernMcpSecurity.importToKern",
+          "group": "kern@4",
+          "when": "resourceLangId == typescript || resourceLangId == javascript || resourceLangId == python"
+        },
+        {
+          "command": "kernMcpSecurity.convertTarget",
+          "group": "kern@5",
           "when": "resourceLangId == typescript || resourceLangId == javascript || resourceLangId == python"
         }
       ]
@@ -133,6 +217,33 @@
           "type": "boolean",
           "default": true,
           "description": "Enable sidebar animations (flow rail, pulse dots, transitions). Disable for a static UI."
+        },
+        "kernMcpSecurity.ai.provider": {
+          "type": "string",
+          "default": "openai",
+          "enum": ["openai", "anthropic", "gemini", "custom"],
+          "enumDescriptions": [
+            "OpenAI (GPT-4o, GPT-4, etc.) — also works with DeepSeek, Qwen, Mistral, Ollama, LM Studio",
+            "Anthropic (Claude Opus, Sonnet, Haiku)",
+            "Google (Gemini Pro, Flash)",
+            "Custom OpenAI-compatible endpoint"
+          ],
+          "description": "LLM provider for AI-powered .kern generation"
+        },
+        "kernMcpSecurity.ai.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for the selected LLM provider"
+        },
+        "kernMcpSecurity.ai.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model ID — only for API mode or Ollama (e.g. gpt-4.1, claude-sonnet-4-6, gemini-2.5-flash, deepseek-chat, llama3.1). CLI engines use their own configured model."
+        },
+        "kernMcpSecurity.ai.endpoint": {
+          "type": "string",
+          "default": "",
+          "description": "Custom API endpoint URL. For DeepSeek: https://api.deepseek.com/v1/chat/completions, Ollama: http://localhost:11434/v1/chat/completions"
         }
       }
     }
@@ -153,6 +264,8 @@
     "typescript": "^5.4.0"
   },
   "dependencies": {
+    "@kernlang/core": "file:../kern-lang/packages/core",
+    "@kernlang/mcp": "file:../kern-lang/packages/mcp",
     "@kernlang/review-mcp": "^3.1.5"
   }
 }

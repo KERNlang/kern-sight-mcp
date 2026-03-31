@@ -1,8 +1,8 @@
-# MCP Security Scanner
+# KERN MCP — Build, Review & Secure MCP Servers
 
-**Find vulnerabilities in your MCP servers before your AI agent goes live.**
+**Write .kern, compile to secure MCP servers, auto-review with 13 OWASP rules.**
 
-Static analysis security scanner for [Model Context Protocol](https://modelcontextprotocol.io) servers. 13 rules mapped to the [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/). TypeScript + Python. Extension for VS Code and compatible editors (Cursor, Windsurf, Antigravity) + CLI + GitHub Action.
+Build and secure [Model Context Protocol](https://modelcontextprotocol.io) servers. Write `.kern` and compile to TypeScript or Python with security guards auto-injected. Scan existing MCP servers with 13 rules mapped to the [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/). Extension for VS Code and compatible editors (Cursor, Windsurf, Antigravity) + CLI + GitHub Action.
 
 Powered by [KERN](https://kernlang.dev) — the structural language for AI-generated code.
 
@@ -12,9 +12,60 @@ Powered by [KERN](https://kernlang.dev) — the structural language for AI-gener
 
 Every AI tool is adding MCP support. Security scanning hasn't kept up. MCP servers handle file I/O, shell commands, network requests, and database queries — all triggered by LLM tool calls. One missing input validation and your agent becomes an attack surface.
 
-This scanner catches those issues at development time.
+KERN MCP takes two approaches:
+1. **Review** — scan existing MCP servers and find vulnerabilities at development time
+2. **Build** — write `.kern` and compile to MCP servers with security guards injected by construction
 
-## Features
+## Build MCP Servers
+
+### Write .kern, compile to secure MCP servers
+
+```kern
+mcp name=MyAPI version=1.0
+
+  tool name=search
+    description text="Search for items"
+    param name=query type=string required=true
+    param name=limit type=number default=10
+    guard type=sanitize param=query
+    guard type=validate param=limit min=1 max=100
+    guard type=rateLimit window=60000 requests=100
+    handler <<<
+      const results = await db.search(args.query, args.limit);
+      return { content: [{ type: "text", text: JSON.stringify(results) }] };
+    >>>
+```
+
+Click **Compile -> TypeScript** or **Compile -> Python** in the sidebar. The transpiler auto-injects:
+- Zod validation from `param` definitions
+- 7 security guards: `sanitize`, `pathContainment`, `validate`, `auth`, `rateLimit`, `sizeLimit`, `sanitizeOutput`
+- Structured JSON logging on every call
+- Error handling with `isError` responses
+
+Compiled output is auto-reviewed with the 13 OWASP rules.
+
+### AI-Powered Generation (Beta)
+
+Describe what you want, pick your AI engine, get a production `.kern` server:
+
+1. Click the **BUILD** tab in the sidebar
+2. The extension auto-detects installed AI CLIs (Claude, Ollama, Codex, Gemini, OpenCode)
+3. Select context from your workspace (package.json, database schemas, API routes, OpenAPI specs)
+4. Describe your server — "Postgres CRUD for users and posts, with JWT auth and rate limiting"
+5. Click **Generate .kern** — AI writes the server with guards
+6. Review, edit, compile, done
+
+Also supports:
+- **Import to .kern** — convert existing TS/Python MCP servers to `.kern` with guards added
+- **Convert TS <-> Python** — direct AI translation between languages
+
+### .kern Language Support
+
+- Syntax highlighting (TextMate grammar)
+- Validation-on-save with inline error diagnostics
+- Right-click context menu for compile/validate
+
+## Review MCP Servers
 
 ### Security Score (0-100)
 
@@ -98,6 +149,50 @@ KERN: Generate MCP Security Badge
 
 Writes a badge, per-tool score table, and JSON report to your README between `<!-- kern-mcp-security-start/end -->` markers.
 
+## Usage
+
+Works in VS Code, Cursor, Windsurf, Antigravity, and other compatible editors.
+
+### Review Mode
+1. Install the extension
+2. Open an MCP server file (TypeScript, JavaScript, or Python)
+3. The sidebar shows score, IR tree, and findings
+4. Click any finding to jump to the line
+5. Use `Cmd+Shift+M` / `Ctrl+Shift+M` to scan manually
+
+### Build Mode
+1. Click the **BUILD** tab in the sidebar
+2. Open or create a `.kern` file
+3. Click **Compile -> TypeScript** or **Compile -> Python**
+4. Compiled output opens beside with auto-review results
+
+### AI Generation (Beta)
+1. Click **BUILD** tab -> **Generate .kern**
+2. Select AI engine from the dropdown (auto-detects installed CLIs)
+3. Describe your server, select workspace context
+4. Review and compile the generated `.kern`
+
+### Configuration
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `kernMcpSecurity.enabled` | `true` | Enable/disable scanning |
+| `kernMcpSecurity.severity` | `"all"` | Filter: `all`, `errors`, `warnings` |
+| `kernMcpSecurity.animations` | `true` | Enable sidebar animations |
+| `kernMcpSecurity.ai.provider` | `"openai"` | LLM provider for AI features (openai, anthropic, gemini, custom) |
+| `kernMcpSecurity.ai.apiKey` | `""` | API key (only for API mode, CLIs use their own auth) |
+| `kernMcpSecurity.ai.model` | `""` | Model ID (only for API/Ollama) |
+| `kernMcpSecurity.ai.endpoint` | `""` | Custom endpoint URL |
+
+Project-level config via `.mcpsecurityrc.json`:
+
+```json
+{
+  "enabled": true,
+  "severity": "errors"
+}
+```
+
 ## CLI
 
 ```bash
@@ -127,41 +222,6 @@ jobs:
           comment: true        # post score + findings to PR
 ```
 
-Outputs: `score`, `grade`, `findings`. See [CI action source](https://github.com/KERNlang/kern-lang/tree/main/packages/review-mcp/ci) for all inputs.
-
-## Contact
-
-- CLI / CI / docs: [kernlang.dev](https://kernlang.dev)
-- Email: hello@kernlang.dev
-
-## Usage
-
-Works in VS Code, Cursor, Windsurf, Antigravity, and other compatible editors.
-
-1. Install the extension
-2. Open an MCP server file (TypeScript, JavaScript, or Python)
-3. The sidebar shows score, IR tree, and findings
-4. Click any finding to jump to the line
-5. Use `Cmd+Shift+M` / `Ctrl+Shift+M` to scan manually
-6. Right-click for "KERN: Scan MCP Server" in the context menu
-
-### Configuration
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `kernMcpSecurity.enabled` | `true` | Enable/disable scanning |
-| `kernMcpSecurity.severity` | `"all"` | Filter: `all`, `errors`, `warnings` |
-| `kernMcpSecurity.animations` | `true` | Enable sidebar animations (flow rail, pulse dots) |
-
-Project-level config via `.mcpsecurityrc.json`:
-
-```json
-{
-  "enabled": true,
-  "severity": "errors"
-}
-```
-
 ## Architecture
 
 The extension spawns a lightweight MCP subprocess for analysis — the editor stays fast. The engine combines three layers:
@@ -169,6 +229,8 @@ The extension spawns a lightweight MCP subprocess for analysis — the editor st
 1. **Legacy regex rules** — fast pattern matching for known vulnerability patterns
 2. **Compiled `.kern` rules** — declarative, human-auditable rules with taint tracking and guard dependencies
 3. **KERN IR inference** — translates MCP server code to KERN's intermediate representation, checks structural invariants (effects must have guards)
+
+The build pipeline uses `@kernlang/core` (parser) and `@kernlang/mcp` (transpiler) to compile `.kern` to MCP servers. 112 tests, 7 security guard types, both TypeScript and Python targets runtime-verified.
 
 No network calls. No telemetry. Everything runs locally.
 
@@ -191,7 +253,7 @@ All 7 lab servers detected. Catches command injection (eval), hardcoded secrets,
 
 ## Links
 
-- [KERN Language](https://kernlang.dev) — the structural language powering the analysis
+- [KERN Language](https://kernlang.dev) — the structural language powering the analysis and compilation
 - [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/) — the security framework we map to
 - [Contact](mailto:hello@kernlang.dev) — bug reports, feature requests, commercial licensing
 
