@@ -1,0 +1,64 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "KERN",
+  "scopeName": "source.kern",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#heredoc" },
+    { "include": "#string" },
+    { "include": "#number" },
+    { "include": "#boolean" },
+    { "include": "#mcp-keywords" },
+    { "include": "#node-keywords" },
+    { "include": "#property" },
+    { "include": "#operator" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "#.*$",
+      "name": "comment.line.number-sign.kern"
+    },
+    "heredoc": {
+      "begin": "<<<",
+      "end": ">>>",
+      "name": "meta.embedded.block.kern",
+      "contentName": "meta.embedded.block.javascript",
+      "beginCaptures": { "0": { "name": "punctuation.definition.heredoc.begin.kern" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.heredoc.end.kern" } }
+    },
+    "string": {
+      "match": "\"[^\"]*\"",
+      "name": "string.quoted.double.kern"
+    },
+    "number": {
+      "match": "\\b\\d+(\\.\\d+)?\\b",
+      "name": "constant.numeric.kern"
+    },
+    "boolean": {
+      "match": "\\b(true|false)\\b",
+      "name": "constant.language.boolean.kern"
+    },
+    "mcp-keywords": {
+      "match": "^\\s*(mcp|tool|resource|prompt|param|guard|handler|description|sampling|elicitation)\\b",
+      "captures": {
+        "1": { "name": "keyword.control.mcp.kern" }
+      }
+    },
+    "node-keywords": {
+      "match": "^\\s*(screen|page|row|col|card|grid|scroll|text|image|progress|divider|codeblock|section|form|button|input|textarea|slider|toggle|modal|list|item|tabs|tab|header|link|theme|server|route|middleware|handler|schema|stream|spawn|timer|on|env|websocket|params|auth|validate|respond|trigger|cli|command|arg|flag|import|separator|table|thead|tbody|tr|th|td|scoreboard|metric|spinner|box|gradient|state|repl|parallel|dispatch|then|each|layout|loading|metadata|generateMetadata|notFound|redirect|fetch|type|interface|field|fn|const|union|variant|service|method|singleton|constructor|signal|cleanup|machine|transition|error|module|export|config|store|test|describe|it|event|hook|provider|effect|logic|memo|callback|ref|context|prop|returns|model|column|relation|repository|dependency|inject|cache|entry|invalidate|conditional|component|select|option|icon|svg|template|slot|body|derive|transform|action|assume|invariant|branch|path|resolve|candidate|discriminator|collect|pattern|apply|expect|recover|strategy|reason|evidence|needs|rule|message)\\b",
+      "captures": {
+        "1": { "name": "keyword.other.node.kern" }
+      }
+    },
+    "property": {
+      "match": "\\b(name|type|version|uri|required|default|min|max|env|port|window|requests|allowlist|baseDir|regex|pattern|replacement|maxTokens)\\s*=",
+      "captures": {
+        "1": { "name": "entity.other.attribute-name.kern" }
+      }
+    },
+    "operator": {
+      "match": "=",
+      "name": "keyword.operator.assignment.kern"
+    }
+  }
+}

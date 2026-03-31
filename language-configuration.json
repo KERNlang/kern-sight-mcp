@@ -1,0 +1,19 @@
+{
+  "comments": {
+    "lineComment": "#"
+  },
+  "brackets": [
+    ["<<<", ">>>"]
+  ],
+  "autoClosingPairs": [
+    { "open": "\"", "close": "\"" },
+    { "open": "<<<", "close": ">>>" }
+  ],
+  "surroundingPairs": [
+    ["\"", "\""]
+  ],
+  "indentationRules": {
+    "increaseIndentPattern": "^\\s*(mcp|tool|resource|prompt|handler|guard|description|screen|page|row|col|card|server|route|cli|command|fn|machine|test|describe|it)\\b",
+    "decreaseIndentPattern": "^\\s*>>>\\s*$"
+  }
+}
