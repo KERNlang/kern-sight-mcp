@@ -49,7 +49,7 @@ Compiled output is auto-reviewed with the 13 OWASP rules.
 Describe what you want, pick your AI engine, get a production `.kern` server:
 
 1. Click the **BUILD** tab in the sidebar
-2. The extension auto-detects installed AI CLIs (Claude, Ollama, Codex, Gemini, OpenCode)
+2. The extension auto-detects installed AI CLIs (Claude, Ollama, Codex, Gemini, Aider, OpenCode)
 3. Select context from your workspace (package.json, database schemas, API routes, OpenAPI specs)
 4. Describe your server — "Postgres CRUD for users and posts, with JWT auth and rate limiting"
 5. Click **Generate .kern** — AI writes the server with guards
@@ -166,7 +166,7 @@ Works in VS Code, Cursor, Windsurf, Antigravity, and other compatible editors.
 3. Click **Compile -> TypeScript** or **Compile -> Python**
 4. Compiled output opens beside with auto-review results
 
-### AI Generation (Beta)
+### AI-Assisted Authoring (Beta)
 1. Click **BUILD** tab -> **Generate .kern**
 2. Select AI engine from the dropdown (auto-detects installed CLIs)
 3. Describe your server, select workspace context
@@ -232,7 +232,7 @@ The extension spawns a lightweight MCP subprocess for analysis — the editor st
 
 The build pipeline uses `@kernlang/core` (parser) and `@kernlang/mcp` (transpiler) to compile `.kern` to MCP servers. 112 tests, 7 security guard types, both TypeScript and Python targets runtime-verified.
 
-No network calls. No telemetry. Everything runs locally.
+Scan and compile run 100% locally — no network calls, no telemetry. AI-assisted authoring (Generate, Import, Convert — Beta) optionally uses local CLI tools or remote APIs, configured by the user.
 
 ## Real-World Results
 

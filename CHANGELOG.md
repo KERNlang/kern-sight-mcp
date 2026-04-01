@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.1.0 (2026-04-01)
+
+### Build Pipeline (Stable)
+- **Compile .kern -> TypeScript/Python** — deterministic transpile with 7 security guards auto-injected
+- `.kern` syntax highlighting (TextMate grammar) and validation-on-save
+- Right-click context menu: Compile, Validate
+- Compiled output auto-reviewed with 13 OWASP MCP rules
+
+### AI-Assisted Authoring (Beta)
+- **Generate .kern** — describe your server, pick an AI engine, get a production .kern with guards
+- **Import to .kern** — convert existing TS/Python MCP servers to .kern
+- **Convert TS <-> Python** — direct AI translation between languages
+- 6 CLI engines: Claude, Ollama, Codex, Gemini, Aider, OpenCode
+- 4 API providers: OpenAI, Anthropic, Gemini, Custom
+- Workspace context scanner: package.json, database schemas, API routes, OpenAPI specs, .env variable names
+- Beta labels in command palette, sidebar, and quick picks for all AI-assisted features
+
+### Improvements
+- Sidebar mode tabs (REVIEW / BUILD) with trust-level separation
+- Cross-platform CLI detection: Windows `shell: true` + stderr "not recognized" check (replaces Unix-only `which`)
+- README corrected: scan/compile local, AI-assisted authoring (Generate, Import, Convert) optional and user-configured
+- Note: Windows AI engine detection may need further testing on edge cases (WSL, PATHEXT)
+
 ## 1.0.0 (2026-03-27)
 
 First stable release.

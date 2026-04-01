@@ -33,7 +33,18 @@ let statusBarItem: vscode.StatusBarItem;
 let sidebarProvider: McpSecuritySidebarProvider;
 let debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let activeRequests = new Map<string, number>(); // URI key → JSON-RPC request ID
-let compiledUris = new Set<string>(); // URIs of compiled output docs — skip auto-review
+let compiledUris = new Set<string>(); // URIs of compiled output docs — skip auto-review (capped at 100)
+const MAX_COMPILED_URIS = 100;
+let mcpCrashCount = 0;
+
+function trackCompiledUri(uri: string): void {
+  if (compiledUris.size >= MAX_COMPILED_URIS) {
+    // Evict oldest (first inserted) entry
+    const first = compiledUris.values().next().value;
+    if (first) compiledUris.delete(first);
+  }
+  compiledUris.add(uri);
+}
 let scannedContext: ContextItem[] = [];
 let mcpClient: McpClient;
 
@@ -360,6 +371,13 @@ async function reviewDocument(document: vscode.TextDocument): Promise<void> {
   const version = document.version;
   const source = document.getText();
   const filePath = document.uri.fsPath;
+
+  // Skip files too large for review — prevents memory spikes and subprocess timeouts
+  const MAX_REVIEW_BYTES = 500_000; // 500KB
+  if (Buffer.byteLength(source) > MAX_REVIEW_BYTES) {
+    outputChannel.appendLine(`[${path.basename(filePath)}] Skipped — file exceeds ${MAX_REVIEW_BYTES / 1000}KB review limit`);
+    return;
+  }
   const uri = document.uri;
   const fileName = path.basename(filePath);
 
@@ -428,14 +446,23 @@ async function reviewDocument(document: vscode.TextDocument): Promise<void> {
     }
     outputChannel.appendLine(`[${fileName}] Analysis failed: ${err instanceof Error ? err.message : String(err)}`);
 
-    // Restart server if it crashed
+    // Restart server if it crashed — with exponential backoff to prevent crash loops
     if (!mcpClient.isRunning()) {
-      outputChannel.appendLine('[MCP Server] Crashed — restarting...');
-      try {
-        await mcpClient.restart();
-        outputChannel.appendLine('[MCP Server] Restarted successfully');
-      } catch (restartErr) {
-        outputChannel.appendLine(`[MCP Server] Restart failed: ${restartErr instanceof Error ? restartErr.message : String(restartErr)}`);
+      mcpCrashCount++;
+      const maxRetries = 5;
+      if (mcpCrashCount > maxRetries) {
+        outputChannel.appendLine(`[MCP Server] Too many crashes (${mcpCrashCount}) — disabled. Reload window to retry.`);
+      } else {
+        const backoffMs = Math.min(1000 * Math.pow(2, mcpCrashCount - 1), 30_000);
+        outputChannel.appendLine(`[MCP Server] Crashed (${mcpCrashCount}/${maxRetries}) — restarting in ${backoffMs}ms...`);
+        await new Promise(r => setTimeout(r, backoffMs));
+        try {
+          await mcpClient.restart();
+          outputChannel.appendLine('[MCP Server] Restarted successfully');
+          mcpCrashCount = 0; // Reset on successful restart
+        } catch (restartErr) {
+          outputChannel.appendLine(`[MCP Server] Restart failed: ${restartErr instanceof Error ? restartErr.message : String(restartErr)}`);
+        }
       }
     }
   }
@@ -493,6 +520,37 @@ function filterFindings(findings: ReviewFinding[], filter: string): ReviewFindin
   if (filter === 'errors') return findings.filter((f) => f.severity === 'error');
   if (filter === 'warnings') return findings.filter((f) => f.severity !== 'info');
   return findings;
+}
+
+// ── Handler Safety Scan ────────────────────────────────────────────────
+// Guards protect inputs, but handler code runs arbitrary logic. Warn about
+// obvious dangerous patterns inside <<<>>> blocks.
+const HANDLER_DANGER_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /\b(exec|execSync|spawn|spawnSync)\s*\(/, label: 'shell command execution' },
+  { pattern: /\beval\s*\(/, label: 'eval()' },
+  { pattern: /\bFunction\s*\(/, label: 'Function() constructor' },
+  { pattern: /\bchild_process\b/, label: 'child_process import' },
+  { pattern: /\bprocess\.env\b/, label: 'direct env access (use guard type=auth instead)' },
+  { pattern: /\brm\s+-rf\b/, label: 'recursive delete' },
+  { pattern: /\bos\.system\s*\(/, label: 'os.system() (Python)' },
+  { pattern: /\bsubprocess\.(run|call|Popen)\s*\(/, label: 'subprocess call (Python)' },
+];
+
+function scanHandlerBlocks(source: string): string[] {
+  const warnings: string[] = [];
+  const handlerRegex = /<<<([\s\S]*?)>>>/g;
+  let match: RegExpExecArray | null;
+  while ((match = handlerRegex.exec(source)) !== null) {
+    const handlerCode = match[1];
+    for (const { pattern, label } of HANDLER_DANGER_PATTERNS) {
+      if (pattern.test(handlerCode)) {
+        const beforeHandler = source.slice(0, match.index);
+        const line = beforeHandler.split('\n').length;
+        warnings.push(`Line ~${line}: handler contains ${label} — guards cannot prevent this`);
+      }
+    }
+  }
+  return warnings;
 }
 
 function findingToDiagnostic(finding: ReviewFinding, document: vscode.TextDocument): vscode.Diagnostic {
@@ -573,53 +631,7 @@ async function generateKernServer(description: string, selectedContextIds: strin
 
     const systemPrompt = `You are a KERN (.kern) MCP server generator. You write production-ready .kern code that compiles to secure MCP servers.
 
-## KERN MCP Syntax
-\`\`\`kern
-mcp name=ServerName version=1.0
-
-  tool name=toolName
-    description text="What the tool does"
-    param name=paramName type=string required=true
-    param name=optionalParam type=number default=50
-    guard type=sanitize param=paramName
-    guard type=pathContainment param=filePath allowlist=/data,/home
-    guard type=validate param=count min=1 max=100
-    guard type=auth env=API_KEY
-    guard type=rateLimit window=60000 requests=100
-    guard type=sizeLimit param=data max=1048576
-    handler <<<
-      // handler code here
-      return { content: [{ type: "text", text: "result" }] };
-    >>>
-
-  resource name=resourceName uri="scheme://path"
-    description text="What the resource provides"
-    handler <<<
-      return { contents: [{ uri: uri.href, text: "content" }] };
-    >>>
-
-  prompt name=promptName
-    description text="What the prompt does"
-    param name=arg type=string required=true
-    handler <<<
-      return { messages: [{ role: "user", content: { type: "text", text: args.arg } }] };
-    >>>
-\`\`\`
-
-## Rules
-- Indent: 2 spaces (strict)
-- Every tool MUST have at least one guard (sanitize, validate, pathContainment, auth, rateLimit, or sizeLimit)
-- Every tool MUST have a description
-- Handlers use <<< >>> delimiters
-- Handler code runs inside an async function with \`args\` (validated params) available
-- Return MCP-format results: { content: [{ type: "text", text: "..." }] }
-- For path params, ALWAYS add guard type=pathContainment
-- For string params, ALWAYS add guard type=sanitize
-- Add guard type=auth for sensitive operations
-- Add guard type=rateLimit for public-facing tools
-
-## Output
-Return ONLY the .kern code. No explanation, no markdown fences, no preamble, no commentary, no confidence notes. Just the .kern source. NOTHING outside valid .kern syntax.`;
+${KERN_MCP_SYNTAX}`;
 
     const userPrompt = `Build an MCP server for:\n\n${description}${contextBlock}`;
 
@@ -664,48 +676,70 @@ Return ONLY the .kern code. No explanation, no markdown fences, no preamble, no 
   }
 }
 
-const IMPORT_SYSTEM_PROMPT = `You convert existing MCP server code (TypeScript or Python) into KERN (.kern) format.
-
-## KERN MCP Syntax
+// ── Shared .kern syntax reference (single source of truth for all AI prompts) ──
+const KERN_MCP_SYNTAX = `## KERN MCP Syntax
 \`\`\`kern
 mcp name=ServerName version=1.0
 
   tool name=toolName
     description text="What the tool does"
     param name=paramName type=string required=true
+    param name=optionalParam type=number default=50
     guard type=sanitize param=paramName
+    guard type=pathContainment param=filePath allowlist=/data,/home
     guard type=validate param=count min=1 max=100
-    guard type=auth env=API_KEY
+    guard type=auth envVar=API_KEY header=authorization
     guard type=rateLimit window=60000 requests=100
+    guard type=sizeLimit param=data max=1048576
     handler <<<
-      // handler code
+      // handler code — runs inside async function with \`args\` (validated params)
       return { content: [{ type: "text", text: "result" }] };
     >>>
 
   resource name=resourceName uri="scheme://path"
-    description text="Description"
+    description text="What the resource provides"
     handler <<<
       return { contents: [{ uri: uri.href, text: "content" }] };
     >>>
 
   prompt name=promptName
-    description text="Description"
+    description text="What the prompt does"
     param name=arg type=string required=true
     handler <<<
       return { messages: [{ role: "user", content: { type: "text", text: args.arg } }] };
     >>>
 \`\`\`
 
-## Rules
+## Guard Types (7 available — compiler auto-injects these into compiled output)
+- \`sanitize\` — strip dangerous characters from string params
+- \`pathContainment\` — enforce file paths stay within allowlist directories
+- \`validate\` — min/max/regex bounds on params
+- \`auth\` — bootstrap check: verifies env var exists (add real token verification for production)
+- \`rateLimit\` — limit calls per time window
+- \`sizeLimit\` — cap input size in bytes
+- \`sanitizeOutput\` — strip prompt-injection patterns from responses
+
+## .kern Rules
 - Indent: 2 spaces (strict)
+- Every tool MUST have at least one guard
+- Every tool MUST have a description
+- Handlers use <<< >>> delimiters
+- For path params, ALWAYS add guard type=pathContainment
+- For string params, ALWAYS add guard type=sanitize
+- Add guard type=auth for sensitive operations
+- Add guard type=rateLimit for public-facing tools
+- Return ONLY .kern code. No explanation, no markdown fences, no commentary. NOTHING outside valid .kern syntax.`;
+
+const IMPORT_SYSTEM_PROMPT = `You convert existing MCP server code (TypeScript or Python) into KERN (.kern) format.
+
+${KERN_MCP_SYNTAX}
+
+## Import-Specific Rules
 - Extract ALL tools, resources, and prompts from the source code
-- Add guards: sanitize for strings, validate for numbers, pathContainment for paths, auth where applicable
 - If the source has no guards, ADD appropriate ones — this is the whole point of importing
-- INLINE all helper functions, utilities, and external references directly into each handler. Do NOT reference functions defined outside the handler block — the compiled output will not have them. If the original code calls a helper like loadDocument(), readFile(), fetchData(), etc., put that logic directly inside the handler <<<>>>
-- INLINE all data structures (objects, arrays, maps, configs) that handlers reference. If a handler uses a DOCUMENTS object, define it inside the handler
-- Handlers use <<< >>> delimiters, code has \`args\` available for validated params
-- Handler code is JavaScript/TypeScript — use Node.js APIs (fs, path, fetch) directly
-- Return ONLY .kern code. No explanation, no markdown fences, no commentary, no confidence notes. NOTHING outside valid .kern syntax.`;
+- INLINE all helper functions, utilities, and external references directly into each handler. Do NOT reference functions defined outside the handler block — the compiled output will not have them
+- INLINE all data structures (objects, arrays, maps, configs) that handlers reference
+- Handler code is JavaScript/TypeScript — use Node.js APIs (fs, path, fetch) directly`;
 
 async function importToKern(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
@@ -737,8 +771,18 @@ async function importToKern(): Promise<void> {
     outputChannel.appendLine(`[Import] ${fileName} → .kern (${cleaned.split('\n').length} lines)`);
 
     try {
-      parse(cleaned);
-      sidebarProvider.showBuildMode(`${fileName} → .kern`, true);
+      const ast = parse(cleaned);
+      // Verify AI actually added guards — check each tool has at least one guard child
+      const tools = (ast.children ?? []).filter(n => n.type === 'tool');
+      const unguarded = tools.filter(t => !(t.children ?? []).some(c => c.type === 'guard'));
+      if (unguarded.length > 0) {
+        const names = unguarded.map(t => t.props?.name || 'unnamed').join(', ');
+        outputChannel.appendLine(`[Import] Warning: ${unguarded.length} tool(s) have no guards: ${names}`);
+        sidebarProvider.showBuildMode(`${fileName} → .kern`, true,
+          `${unguarded.length} tool(s) missing guards (${names}) — add guards before compiling`);
+      } else {
+        sidebarProvider.showBuildMode(`${fileName} → .kern`, true);
+      }
     } catch {
       sidebarProvider.showBuildMode(`${fileName} → .kern`, false, 'Imported code has syntax issues — review and fix, then compile');
     }
@@ -761,10 +805,11 @@ async function convertMCPTarget(): Promise<void> {
   const lang = editor.document.languageId;
   const isPython = lang === 'python';
   const targetLabel = isPython ? 'TypeScript' : 'Python';
+  const target: 'typescript' | 'python' = isPython ? 'typescript' : 'python';
 
   const pick = await vscode.window.showQuickPick(
-    [`Convert to ${targetLabel}`, 'Import to .kern first'],
-    { placeHolder: `Convert this ${isPython ? 'Python' : 'TypeScript'} MCP server` },
+    [`Convert to ${targetLabel} via .kern (Beta)`, 'Import to .kern only (Beta)'],
+    { placeHolder: `Convert this ${isPython ? 'Python' : 'TypeScript'} MCP server — AI imports to .kern, compiler injects security guards` },
   );
 
   if (!pick) return;
@@ -773,7 +818,8 @@ async function convertMCPTarget(): Promise<void> {
     return importToKern();
   }
 
-  // Direct AI translation — no .kern middle step
+  // Two-step conversion: AI → .kern → compile → secure target code
+  // Step 1: Import to .kern with handlers written in the TARGET language
   const source = editor.document.getText();
   const fileName = path.basename(editor.document.fileName);
 
@@ -787,58 +833,102 @@ async function convertMCPTarget(): Promise<void> {
     const targetLangFull = isPython ? 'TypeScript' : 'Python';
     const sourceLangFull = isPython ? 'Python' : 'TypeScript';
 
-    const convertPrompt = `You convert MCP servers between languages. Convert this ${sourceLangFull} MCP server to ${targetLangFull}.
+    // Import prompt, but with instruction to write handlers in target language
+    const convertImportPrompt = IMPORT_SYSTEM_PROMPT + `\n\nIMPORTANT: Write all handler code in ${targetLangFull}, NOT ${sourceLangFull}. ` +
+      `Translate the handler logic to idiomatic ${targetLangFull} while extracting the .kern structure.` +
+      (target === 'python' ? '\nTag each handler with lang=python.' : '');
 
-Rules:
-- Translate ALL code — handler logic, data structures, helper functions — to idiomatic ${targetLangFull}
-- ${isPython ? 'Use @modelcontextprotocol/sdk with McpServer, StdioServerTransport, and zod for validation' : 'Use mcp.server.fastmcp with FastMCP, @mcp.tool() decorators, and Python type hints'}
-- Keep the same tool names, descriptions, and parameter schemas
-- Add input sanitization and validation
-- Add structured JSON logging
-- Add error handling with try/catch${isPython ? '' : '/except'}
-- Return ONLY the ${targetLangFull} code. No explanation, no markdown fences, no commentary, no confidence notes, no summaries. If you want to add notes, use code comments (# for Python, // for TypeScript). NOTHING outside valid ${targetLangFull} syntax.`;
+    const userPrompt = `Convert this ${sourceLangFull} MCP server to .kern (with ${targetLangFull} handlers):\n\n${source}`;
+    const generated = await generateWithEngine(engine, convertImportPrompt, userPrompt, (msg) => outputChannel.appendLine(msg));
+    const kernCode = generated.replace(/^```(?:kern)?\s*\n?/m, '').replace(/\n?```\s*$/m, '').trim();
 
-    const userPrompt = `Convert this ${sourceLangFull} MCP server to ${targetLangFull}:\n\n${source}`;
-    const generated = await generateWithEngine(engine, convertPrompt, userPrompt, (msg) => outputChannel.appendLine(msg));
-    const cleaned = generated.replace(/^```(?:typescript|python|ts|py)?\s*\n?/m, '').replace(/\n?```\s*$/m, '').trim();
+    // Show .kern intermediate
+    const kernDoc = await vscode.workspace.openTextDocument({ content: kernCode, language: 'kern' });
+    await vscode.window.showTextDocument(kernDoc);
 
-    const compiledLang = isPython ? 'typescript' : 'python';
-    const compiledFileName = isPython
-      ? fileName.replace(/\.py$/, '-converted.ts')
-      : fileName.replace(/\.ts$|\.js$/, '-converted.py');
+    outputChannel.appendLine(`[Convert] Step 1: ${fileName} → .kern (${kernCode.split('\n').length} lines)`);
 
-    const compiledDoc = await vscode.workspace.openTextDocument({ content: cleaned, language: compiledLang });
-    compiledUris.add(compiledDoc.uri.toString());
+    // Step 2: Compile .kern → target language with security guards
+    const ast = parse(kernCode);
+
+    // Verify Python handlers are tagged — AI may not consistently add lang=python
+    if (target === 'python') {
+      const tools = (ast.children ?? []).filter(n => n.type === 'tool');
+      const handlers = tools.flatMap(t => (t.children ?? []).filter(c => c.type === 'handler'));
+      const untagged = handlers.filter(h => {
+        const lang = h.props?.lang as string | undefined;
+        return !lang || (lang !== 'python' && lang !== 'py');
+      });
+      if (untagged.length > 0) {
+        outputChannel.appendLine(`[Convert] Warning: ${untagged.length} handler(s) missing lang=python tag — Python transpiler may produce empty handlers. Review the .kern file.`);
+      }
+    }
+
+    const config = resolveConfig({ target: 'mcp' });
+    const result = target === 'python'
+      ? transpileMCPPython(ast, config)
+      : transpileMCP(ast, config);
+
+    const compiledFileName = target === 'python'
+      ? fileName.replace(/\.\w+$/, '-converted.py')
+      : fileName.replace(/\.\w+$/, '-converted.ts');
+
+    const compiledDoc = await vscode.workspace.openTextDocument({
+      content: result.code,
+      language: target === 'python' ? 'python' : 'typescript',
+    });
+    trackCompiledUri(compiledDoc.uri.toString());
     await vscode.window.showTextDocument(compiledDoc, vscode.ViewColumn.Beside, true);
 
-    // Auto-review
-    const findings = reviewMCPSource(cleaned, compiledFileName);
+    outputChannel.appendLine(`[Convert] Step 2: .kern → ${compiledFileName} (${result.tsTokenCount} tokens, compiled with security guards)`);
+
+    // Auto-review using full pipeline
+    let findings: ReviewFinding[] = [];
+    let irNodes: IRNode[] = [];
+    let score: SecurityScore | undefined;
+    try {
+      const reviewResult = await mcpClient.callTool(result.code, compiledFileName, 10000);
+      findings = reviewResult.findings ?? [];
+      irNodes = (reviewResult.irNodes ?? []) as IRNode[];
+      score = reviewResult.score;
+    } catch {
+      findings = reviewMCPSource(result.code, compiledFileName);
+    }
+
     const diagnostics = findings.map((f) => findingToDiagnostic(f, compiledDoc));
     diagnosticCollection.set(compiledDoc.uri, diagnostics);
 
-    outputChannel.appendLine(`[Convert] ${fileName} → ${compiledFileName} (${findings.length} findings)`);
-    updateStatusBar('built', findings.length);
+    outputChannel.appendLine(`[Convert] Auto-review: ${findings.length} finding(s)${score ? `, score: ${score.total} (${score.grade})` : ''}`);
+    updateStatusBar('built', findings.length, score?.grade);
 
     const buildResult: import('./review-panel').McpReviewResult = {
       fileName: compiledFileName,
       filePath: compiledDoc.uri.toString(),
       findings,
-      irNodes: [],
-      lang: compiledLang === 'python' ? 'python' : 'typescript',
+      irNodes,
+      lang: target === 'python' ? 'python' : 'typescript',
+      score,
     };
     sidebarProvider.showBuildResult(buildResult, fileName);
 
     if (findings.length === 0) {
-      vscode.window.showInformationMessage(`${fileName} converted to ${targetLabel} — no security findings`);
+      vscode.window.showInformationMessage(`${fileName} converted via .kern → ${targetLabel} — no security findings`);
     } else {
-      vscode.window.showWarningMessage(`${fileName} converted — ${findings.length} finding(s)`);
+      const errors = findings.filter(f => f.severity === 'error').length;
+      const warnings = findings.filter(f => f.severity === 'warning').length;
+      vscode.window.showWarningMessage(`${fileName} converted — ${errors} error(s), ${warnings} warning(s)`);
     }
   } catch (err) {
     updateStatusBar('error', 0);
     const msg = err instanceof Error ? err.message : String(err);
-    outputChannel.appendLine(`[Convert] Failed: ${msg}`);
-    const engineLabel = detectedEngines.find(e => e.id === engine)?.label ?? engine;
-    sidebarProvider.showGenerateError(msg, engineLabel);
+    if (err instanceof KernParseError) {
+      outputChannel.appendLine(`[Convert] .kern parse error: ${msg} — review the .kern file and fix, then compile manually`);
+      sidebarProvider.showBuildMode(`${fileName} → .kern`, false, 'AI-generated .kern has syntax issues — review and fix, then compile');
+    } else {
+      outputChannel.appendLine(`[Convert] Failed: ${msg}`);
+      const engineLabel = detectedEngines.find(e => e.id === engine)?.label ?? engine;
+      sidebarProvider.showGenerateError(msg, engineLabel);
+    }
   }
 }
 
@@ -915,6 +1005,19 @@ async function compileKern(target: 'typescript' | 'python'): Promise<void> {
 
   try {
     const ast = parse(source);
+
+    // Warn about dangerous patterns in handler blocks — guards protect inputs,
+    // but can't control what handler code does with them.
+    const handlerWarnings = scanHandlerBlocks(source);
+    if (handlerWarnings.length > 0) {
+      for (const w of handlerWarnings) {
+        outputChannel.appendLine(`[Build] Handler warning: ${w}`);
+      }
+      vscode.window.showWarningMessage(
+        `${handlerWarnings.length} handler safety warning(s) — check output channel`,
+      );
+    }
+
     const config = resolveConfig({ target: 'mcp' });
     const result = target === 'python'
       ? transpileMCPPython(ast, config)
@@ -930,29 +1033,43 @@ async function compileKern(target: 'typescript' | 'python'): Promise<void> {
       content: result.code,
       language: lang,
     });
-    compiledUris.add(doc.uri.toString());
+    trackCompiledUri(doc.uri.toString());
     await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside, true);
 
     outputChannel.appendLine(`[Build] ${fileName} → ${compiledFileName} (${result.tsTokenCount} tokens, ${target})`);
 
-    // Auto-review the compiled output
-    const findings = reviewMCPSource(result.code, compiledFileName);
+    // Auto-review the compiled output using the same full pipeline as REVIEW mode
+    // (detect → review → infer IR → compute score) for consistent findings.
+    let findings: ReviewFinding[] = [];
+    let irNodes: IRNode[] = [];
+    let score: SecurityScore | undefined;
+    try {
+      const reviewResult = await mcpClient.callTool(result.code, compiledFileName, 10000);
+      findings = reviewResult.findings ?? [];
+      irNodes = (reviewResult.irNodes ?? []) as IRNode[];
+      score = reviewResult.score;
+    } catch {
+      // Fallback to in-process review if subprocess unavailable
+      findings = reviewMCPSource(result.code, compiledFileName);
+    }
+
     const diagnostics = findings.map((f) => findingToDiagnostic(f, doc));
     diagnosticCollection.set(doc.uri, diagnostics);
 
-    outputChannel.appendLine(`[Build] Auto-review: ${findings.length} finding(s)`);
+    outputChannel.appendLine(`[Build] Auto-review: ${findings.length} finding(s)${score ? `, score: ${score.total} (${score.grade})` : ''}`);
 
     const errors = findings.filter(f => f.severity === 'error').length;
     const warnings = findings.filter(f => f.severity === 'warning').length;
-    updateStatusBar('built', findings.length);
+    updateStatusBar('built', findings.length, score?.grade);
 
     // Update sidebar with build result + breadcrumb
     const buildResult: import('./review-panel').McpReviewResult = {
       fileName: compiledFileName,
       filePath: doc.uri.toString(),
       findings,
-      irNodes: [],
+      irNodes,
       lang: target === 'python' ? 'python' : 'typescript',
+      score,
     };
     sidebarProvider.showBuildResult(buildResult, fileName);
 

@@ -98,11 +98,13 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
 
   update(result: McpReviewResult): void {
     this._current = result;
+    this._mode = 'review';
     this._render();
   }
 
   showNotMcp(): void {
     this._current = null;
+    this._mode = 'review';
     if (!this._view) return;
     this._view.webview.html = buildNotMcpHTML();
   }
@@ -155,11 +157,16 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
 
   updateConfigGuardian(servers: import('./config-guardian').McpServerEntry[]): void {
     this._configServers = servers;
-    this._render();
+    // Don't re-render if we're in build mode — config updates shouldn't reset the BUILD screen
+    if (this._mode !== 'build') {
+      this._render();
+    }
   }
 
   private _render(): void {
     if (!this._view) return;
+    // Only render review mode content — build mode has its own explicit render calls
+    if (this._mode === 'build') return;
     const animations = vscode.workspace.getConfiguration('kernMcpSecurity').get<boolean>('animations', true);
     if (this._current) {
       this._view.webview.html = buildReviewHTML(this._current, this.safeFixRules, this._configServers, animations);
@@ -437,10 +444,10 @@ function buildBuildModeHTML(fileName: string, syntaxValid: boolean, errorMessage
 
     <div class="build-actions">
       <button class="build-btn" ${!syntaxValid ? 'disabled' : ''} onclick="vscode.postMessage({type:'compileMCP',target:'typescript'})">
-        <span class="build-btn-icon">&#9654;</span> Compile &rarr; TypeScript
+        <span class="build-btn-icon">&#9654;</span> Compile &rarr; TypeScript <span class="stable-tag">STABLE</span>
       </button>
       <button class="build-btn" ${!syntaxValid ? 'disabled' : ''} onclick="vscode.postMessage({type:'compileMCP',target:'python'})">
-        <span class="build-btn-icon">&#9654;</span> Compile &rarr; Python
+        <span class="build-btn-icon">&#9654;</span> Compile &rarr; Python <span class="stable-tag">STABLE</span>
       </button>
     </div>
 
@@ -533,13 +540,19 @@ function buildGenerateHTML(contextItems: { id: string; label: string; category: 
   ).join('');
 
   const contextList = contextItems.length > 0
-    ? contextItems.map(item => `
+    ? contextItems.map(item => {
+        // .env files are opt-in — variable names are sent to AI providers
+        const isEnv = item.category === 'env';
+        const checked = isEnv ? '' : 'checked';
+        const envWarn = isEnv ? ' <span style="color:var(--kern-orange);font-size:9px;">(sent to AI)</span>' : '';
+        return `
         <label class="context-item">
-          <input type="checkbox" class="context-check" data-id="${escapeHTML(item.id)}" checked>
+          <input type="checkbox" class="context-check" data-id="${escapeHTML(item.id)}" ${checked}>
           <span class="context-icon">${categoryIcons[item.category] ?? '&#128196;'}</span>
-          <span class="context-label">${escapeHTML(item.label)}</span>
+          <span class="context-label">${escapeHTML(item.label)}${envWarn}</span>
           <span class="context-preview">${escapeHTML(item.preview)}</span>
-        </label>`).join('')
+        </label>`;
+      }).join('')
     : '<div style="color:var(--text-muted);font-size:11px;padding:8px 0;">No project context found. Describe your server below.</div>';
 
   return buildShell(`
@@ -709,6 +722,7 @@ function buildShell(content: string, options?: { animations?: boolean; activeMod
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
 <style>
   :root {
     --bg: #0d1117;
@@ -1619,6 +1633,18 @@ function buildShell(content: string, options?: { animations?: boolean; activeMod
     margin-left: 4px;
   }
 
+  .stable-tag {
+    font-size: 7px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--kern-green);
+    vertical-align: middle;
+    margin-left: 4px;
+  }
+
   /* -- Engine Picker -- */
 
   .engine-picker {
@@ -1868,7 +1894,7 @@ function buildShell(content: string, options?: { animations?: boolean; activeMod
 
 <div class="mode-tabs">
   <button class="mode-tab ${options?.activeMode !== 'build' ? 'active' : ''}" data-mode="review">REVIEW</button>
-  <button class="mode-tab ${options?.activeMode === 'build' ? 'active' : ''}" data-mode="build">BUILD</button>
+  <button class="mode-tab ${options?.activeMode === 'build' ? 'active' : ''}" data-mode="build" title="Compile (stable) runs deterministic transpilation with security guards. Generate, Import, Convert (beta) use AI engines.">BUILD</button>
 </div>
 
 <div class="flow-rail"><div class="flow-rail-bg"></div><div class="flow-rail-energy"></div></div>

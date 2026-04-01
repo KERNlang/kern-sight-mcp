@@ -51,7 +51,7 @@ export const SAFE_AUTOFIXES: Record<string, AutofixFn> = {
       `${indent}// SECURITY: Validate path is within allowed directory`,
       `${indent}const resolvedPath = require('path').resolve(${varName});`,
       `${indent}const allowedDir = require('path').resolve('./allowed');`,
-      `${indent}if (!resolvedPath.startsWith(allowedDir)) {`,
+      `${indent}if (resolvedPath !== allowedDir && !resolvedPath.startsWith(allowedDir + require('path').sep)) {`,
       `${indent}  throw new Error('Path traversal blocked: ' + ${varName});`,
       `${indent}}`,
     ].join('\n') + '\n';
@@ -217,7 +217,7 @@ export const PYTHON_AUTOFIXES: Record<string, AutofixFn> = {
       `${indent}import os`,
       `${indent}resolved = os.path.realpath(${varName})`,
       `${indent}allowed_dir = os.path.realpath("./allowed")`,
-      `${indent}if not resolved.startswith(allowed_dir):`,
+      `${indent}if resolved != allowed_dir and not resolved.startswith(allowed_dir + os.sep):`,
       `${indent}    raise ValueError(f"Path traversal blocked: {${varName}}")`,
     ].join('\n') + '\n';
 

@@ -108,15 +108,15 @@
       },
       {
         "command": "kernMcpSecurity.generateMCP",
-        "title": "KERN: Generate MCP Server with AI"
+        "title": "KERN: Generate MCP Server with AI (Beta)"
       },
       {
         "command": "kernMcpSecurity.importToKern",
-        "title": "KERN: Import MCP Server to .kern"
+        "title": "KERN: Import MCP Server to .kern (Beta)"
       },
       {
         "command": "kernMcpSecurity.convertTarget",
-        "title": "KERN: Convert MCP Server (TS ↔ Python)"
+        "title": "KERN: Convert MCP Server (TS ↔ Python) (Beta)"
       }
     ],
     "keybindings": [
@@ -228,7 +228,7 @@
             "Google (Gemini Pro, Flash)",
             "Custom OpenAI-compatible endpoint"
           ],
-          "description": "LLM provider for AI-powered .kern generation"
+          "description": "LLM provider for AI-assisted authoring (Generate, Import, Convert)"
         },
         "kernMcpSecurity.ai.apiKey": {
           "type": "string",
