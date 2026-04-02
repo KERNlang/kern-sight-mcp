@@ -1,0 +1,33 @@
+mcp name=APIProxy version=1.0
+
+  tool name=fetch_url
+    description text="Fetch data from an allowed API endpoint"
+    param name=url type=string required=true
+    param name=method type=string default="GET"
+    guard type=validate param=url pattern="^https://(api\\.example\\.com|api\\.github\\.com)/"
+    guard type=rateLimit window=60000 requests=60
+    guard type=sanitizeOutput
+    handler <<<
+      const response = await fetch(args.url, { method: args.method });
+      const data = await response.text();
+      return { content: [{ type: "text", text: data }] };
+    >>>
+
+  tool name=post_data
+    description text="POST data to an allowed API endpoint"
+    param name=url type=string required=true
+    param name=body type=string required=true
+    guard type=validate param=url pattern="^https://api\\.example\\.com/"
+    guard type=sizeLimit param=body maxBytes=65536
+    guard type=auth method=bearer
+    guard type=rateLimit window=60000 requests=20
+    guard type=sanitizeOutput
+    handler <<<
+      const response = await fetch(args.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: args.body,
+      });
+      const data = await response.text();
+      return { content: [{ type: "text", text: data }] };
+    >>>

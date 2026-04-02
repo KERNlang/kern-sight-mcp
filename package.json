@@ -117,6 +117,10 @@
       {
         "command": "kernMcpSecurity.convertTarget",
         "title": "KERN: Convert MCP Server (TS ↔ Python) (Beta)"
+      },
+      {
+        "command": "kernMcpSecurity.newKernFromTemplate",
+        "title": "KERN: New .kern from Template"
       }
     ],
     "keybindings": [
@@ -130,8 +134,13 @@
     "languages": [
       {
         "id": "kern",
-        "extensions": [".kern"],
-        "aliases": ["KERN", "kern"],
+        "extensions": [
+          ".kern"
+        ],
+        "aliases": [
+          "KERN",
+          "kern"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -221,7 +230,12 @@
         "kernMcpSecurity.ai.provider": {
           "type": "string",
           "default": "openai",
-          "enum": ["openai", "anthropic", "gemini", "custom"],
+          "enum": [
+            "openai",
+            "anthropic",
+            "gemini",
+            "custom"
+          ],
           "enumDescriptions": [
             "OpenAI (GPT-4o, GPT-4, etc.) — also works with DeepSeek, Qwen, Mistral, Ollama, LM Studio",
             "Anthropic (Claude Opus, Sonnet, Haiku)",
@@ -253,7 +267,7 @@
     "watch": "node build.mjs --watch",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "echo 'Tests moved to @kernlang/review-mcp'",
+    "test": "vitest run",
     "lint": "tsc --noEmit"
   },
   "devDependencies": {
@@ -261,7 +275,8 @@
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^2.24.0",
     "esbuild": "^0.20.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.2"
   },
   "dependencies": {
     "@kernlang/core": "file:../kern-lang/packages/core",

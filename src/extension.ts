@@ -15,6 +15,9 @@ import { detectEngines, generateWithEngine } from './ai-provider';
 import type { AIEngine } from './ai-provider';
 import { scanWorkspaceContext } from './context-scanner';
 import type { ContextItem } from './context-scanner';
+import { REVIEW_DEBOUNCE_MS, SCAN_TIMEOUT_MS } from './constants';
+import { recordScore } from './score-history';
+import type { ScoreDiff } from './score-history';
 
 const SUPPORTED_LANGUAGES = new Set([
   'typescript', 'typescriptreact', 'javascript', 'javascriptreact', 'python',
@@ -47,6 +50,7 @@ function trackCompiledUri(uri: string): void {
 }
 let scannedContext: ContextItem[] = [];
 let mcpClient: McpClient;
+let workspaceState: vscode.Memento;
 
 export function activate(context: vscode.ExtensionContext): void {
   try {
@@ -56,6 +60,7 @@ export function activate(context: vscode.ExtensionContext): void {
     statusBarItem.command = 'kernMcpSecurity.showOutput';
     statusBarItem.show();
     updateStatusBar('idle', 0);
+    workspaceState = context.workspaceState;
 
     // Start MCP server
     const serverPath = path.join(__dirname, 'mcp-server.js');
@@ -282,6 +287,9 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.commands.registerCommand('kernMcpSecurity.convertTarget', () => {
         void convertMCPTarget();
       }),
+      vscode.commands.registerCommand('kernMcpSecurity.newKernFromTemplate', () => {
+        void createKernTemplate(context.extensionUri);
+      }),
     );
 
     context.subscriptions.push(diagnosticCollection, outputChannel, statusBarItem);
@@ -354,7 +362,7 @@ function scheduleReview(document: vscode.TextDocument): void {
   debounceTimers.set(key, setTimeout(() => {
     debounceTimers.delete(key);
     void reviewDocument(document);
-  }, 800));
+  }, REVIEW_DEBOUNCE_MS));
 }
 
 function isActiveDocument(key: string): boolean {
@@ -391,7 +399,7 @@ async function reviewDocument(document: vscode.TextDocument): Promise<void> {
   }
 
   try {
-    const result = await mcpClient.callTool(source, filePath, 10000);
+    const result = await mcpClient.callTool(source, filePath, SCAN_TIMEOUT_MS);
 
     // Check if superseded by a newer request for the same file
     if (activeRequests.get(key) !== requestId) {
@@ -435,7 +443,8 @@ async function reviewDocument(document: vscode.TextDocument): Promise<void> {
     if (activeDoc) {
       const scoreGrade = result.score ? `${result.score.grade}` : '';
       updateStatusBar('done', findings.length, scoreGrade);
-      sidebarProvider.update(reviewResult);
+      const scoreDiff = result.score ? recordScore(workspaceState, filePath, result.score) : null;
+      sidebarProvider.update(reviewResult, scoreDiff);
     }
   } catch (err) {
     // If superseded, silently ignore
@@ -932,23 +941,34 @@ async function convertMCPTarget(): Promise<void> {
   }
 }
 
-async function createKernTemplate(): Promise<void> {
-  const template = `mcp name=MyServer version=1.0
+const KERN_TEMPLATES: { label: string; description: string; file: string }[] = [
+  { label: 'Minimal', description: 'Hello world — single tool with sanitize guard', file: 'minimal.kern' },
+  { label: 'Database CRUD', description: 'List, get, create, delete with auth + rate limiting', file: 'crud-database.kern' },
+  { label: 'File Server', description: 'Read, write, list with path containment guards', file: 'file-server.kern' },
+  { label: 'API Proxy', description: 'Fetch + POST to allowed endpoints with SSRF protection', file: 'api-proxy.kern' },
+  { label: 'Search', description: 'Paginated search with sanitization + rate limiting', file: 'search.kern' },
+  { label: 'Webhook Receiver', description: 'Incoming webhooks with HMAC auth + size limits', file: 'webhook.kern' },
+];
 
-  tool name=hello
-    description text="Say hello"
-    param name=name type=string required=true
-    guard type=sanitize param=name
-    handler <<<
-      return { content: [{ type: "text", text: \`Hello, \${args.name}!\` }] };
-    >>>
-`;
-
-  const doc = await vscode.workspace.openTextDocument({
-    content: template,
-    language: 'kern',
+async function createKernTemplate(extensionUri: vscode.Uri): Promise<void> {
+  const picked = await vscode.window.showQuickPick(KERN_TEMPLATES, {
+    placeHolder: 'Choose a .kern template',
   });
-  await vscode.window.showTextDocument(doc);
+  if (!picked) return;
+
+  const templateUri = vscode.Uri.joinPath(extensionUri, 'templates', picked.file);
+  try {
+    const content = Buffer.from(await vscode.workspace.fs.readFile(templateUri)).toString('utf-8');
+    const doc = await vscode.workspace.openTextDocument({ content, language: 'kern' });
+    await vscode.window.showTextDocument(doc);
+  } catch {
+    // Fallback to inline minimal template if templates dir is missing
+    const doc = await vscode.workspace.openTextDocument({
+      content: 'mcp name=MyServer version=1.0\n\n  tool name=hello\n    description text="Say hello"\n    param name=name type=string required=true\n    guard type=sanitize param=name\n    handler <<<\n      return { content: [{ type: "text", text: `Hello, ${args.name}!` }] };\n    >>>\n',
+      language: 'kern',
+    });
+    await vscode.window.showTextDocument(doc);
+  }
 }
 
 // ── .kern Validation ──────────────────────────────────────────────────
@@ -961,7 +981,7 @@ function scheduleKernValidation(document: vscode.TextDocument): void {
   debounceTimers.set(key, setTimeout(() => {
     debounceTimers.delete(key);
     void validateKernDocument(document);
-  }, 800));
+  }, REVIEW_DEBOUNCE_MS));
 }
 
 function validateKernDocument(document: vscode.TextDocument): void {
@@ -1140,5 +1160,14 @@ export function deactivate(): void {
   }
   debounceTimers.clear();
   activeRequests.clear();
+  compiledUris.clear();
   mcpClient?.stop();
+}
+
+/** Reset mutable extension state between test runs. */
+export function _resetForTesting(): void {
+  debounceTimers.clear();
+  activeRequests.clear();
+  compiledUris.clear();
+  scannedContext = [];
 }

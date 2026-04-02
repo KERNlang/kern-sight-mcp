@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
+import { AI_CLI_TIMEOUT_MS } from './constants';
 
 const execFileAsync = promisify(execFile);
 
@@ -136,29 +137,29 @@ async function generateWithCLI(
   switch (engineId) {
     case 'claude-cli':
       log('[AI] Running claude...');
-      output = await spawnWithStdin('claude', ['-p'], fullPrompt, 120_000);
+      output = await spawnWithStdin('claude', ['-p'], fullPrompt, AI_CLI_TIMEOUT_MS);
       break;
     case 'ollama': {
       const model = vscode.workspace.getConfiguration('kernMcpSecurity').get<string>('ai.model', '') || 'llama3.1';
       log(`[AI] Running ollama (${model})...`);
-      output = await spawnWithStdin('ollama', ['run', model], fullPrompt, 120_000);
+      output = await spawnWithStdin('ollama', ['run', model], fullPrompt, AI_CLI_TIMEOUT_MS);
       break;
     }
     case 'codex-cli':
       log('[AI] Running codex...');
-      output = await spawnWithStdin('codex', ['-q'], fullPrompt, 120_000);
+      output = await spawnWithStdin('codex', ['-q'], fullPrompt, AI_CLI_TIMEOUT_MS);
       break;
     case 'gemini-cli':
       log('[AI] Running gemini...');
-      output = await spawnWithStdin('gemini', ['-p'], fullPrompt, 120_000);
+      output = await spawnWithStdin('gemini', ['-p'], fullPrompt, AI_CLI_TIMEOUT_MS);
       break;
     case 'aider':
       log('[AI] Running aider...');
-      output = await spawnWithStdin('aider', ['--no-git', '--yes', '--message-file', '-'], fullPrompt, 120_000);
+      output = await spawnWithStdin('aider', ['--no-git', '--yes', '--message-file', '-'], fullPrompt, AI_CLI_TIMEOUT_MS);
       break;
     case 'opencode':
       log('[AI] Running opencode...');
-      output = await spawnWithStdin('opencode', ['-p'], fullPrompt, 120_000);
+      output = await spawnWithStdin('opencode', ['-p'], fullPrompt, AI_CLI_TIMEOUT_MS);
       break;
     default:
       throw new Error(`Unknown engine: ${engineId}`);
@@ -253,7 +254,7 @@ async function generateWithAPI(
   log(`[AI] Calling ${config.provider} API (${config.model})...`);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120_000);
+  const timeout = setTimeout(() => controller.abort(), AI_CLI_TIMEOUT_MS);
 
   let resp: Response;
   try {

@@ -1,7 +1,7 @@
 /**
  * Config Guardian — scans MCP configuration files for security issues.
  *
- * Watches: claude_desktop_config.json, .cursor/mcp.json, .vscode/mcp.json
+ * Watches: claude_desktop_config.json, .cursor/mcp.json, .vscode/mcp.json, .windsurf/mcp.json
  * Detects: hardcoded secrets, unscanned paths, missing version pins
  * Trust levels: verified (green), unknown (yellow), risky (red)
  *
@@ -14,6 +14,7 @@ import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { CONFIG_POLL_INTERVAL_MS } from './constants';
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -31,7 +32,7 @@ export interface McpServerEntry {
   command: string;
   args: string[];
   env: Record<string, string>;
-  source: 'claude' | 'cursor' | 'vscode';
+  source: 'claude' | 'cursor' | 'vscode' | 'windsurf';
   configPath: string;
   issues: ConfigIssue[];
   trust: TrustLevel;
@@ -42,7 +43,8 @@ export interface McpServerEntry {
 const SECRET_PREFIXES = /^(sk-|ghp_|gho_|github_pat_|xox[bpas]-|AKIA|AIza|Bearer\s|glpat-|npm_|pypi-)/;
 const SECRET_KEY_NAMES = /^(api[_-]?key|secret[_-]?key|password|token|private[_-]?key|auth[_-]?token|access[_-]?key|client[_-]?secret|database[_-]?url)$/i;
 
-function shannonEntropy(s: string): number {
+/** @internal Exported for testing only. */
+export function shannonEntropy(s: string): number {
   if (s.length === 0) return 0;
   const freq = new Map<string, number>();
   for (const c of s) freq.set(c, (freq.get(c) || 0) + 1);
@@ -54,7 +56,8 @@ function shannonEntropy(s: string): number {
   return entropy;
 }
 
-function isLikelySecret(key: string, value: string): boolean {
+/** @internal Exported for testing only. */
+export function isLikelySecret(key: string, value: string): boolean {
   if (SECRET_PREFIXES.test(value)) return true;
   if (SECRET_KEY_NAMES.test(key)) return true;
   if (value.length > 16 && shannonEntropy(value) > 4.5) return true;
@@ -86,7 +89,8 @@ interface RawMcpConfig {
   }>;
 }
 
-function parseConfigFile(raw: string, source: 'claude' | 'cursor' | 'vscode', configPath: string): McpServerEntry[] {
+/** @internal Exported for testing only. */
+export function parseConfigFile(raw: string, source: 'claude' | 'cursor' | 'vscode' | 'windsurf', configPath: string): McpServerEntry[] {
   const entries: McpServerEntry[] = [];
   try {
     const parsed = JSON.parse(raw) as RawMcpConfig;
@@ -113,7 +117,14 @@ function parseConfigFile(raw: string, source: 'claude' | 'cursor' | 'vscode', co
       // Check for missing version pinning
       if (/\bnpx\b/.test(command) || args.some(a => /\bnpx\b/.test(a))) {
         const fullCmd = [command, ...args].join(' ');
-        if (!/@\d/.test(fullCmd) && !/@latest/.test(fullCmd)) {
+        if (/@latest\b/.test(fullCmd)) {
+          issues.push({
+            type: 'missing-version-pin',
+            severity: 'error',
+            message: `@latest is not a version pin — supply chain risk`,
+            detail: `Use npx package@1.2.3 with an exact version instead of @latest`,
+          });
+        } else if (!/@\d/.test(fullCmd)) {
           issues.push({
             type: 'missing-version-pin',
             severity: 'warning',
@@ -124,7 +135,14 @@ function parseConfigFile(raw: string, source: 'claude' | 'cursor' | 'vscode', co
       }
       if (/\buvx\b/.test(command) || args.some(a => /\buvx\b/.test(a))) {
         const fullCmd = [command, ...args].join(' ');
-        if (!/==/.test(fullCmd) && !/@/.test(fullCmd)) {
+        if (/@latest\b/.test(fullCmd)) {
+          issues.push({
+            type: 'missing-version-pin',
+            severity: 'error',
+            message: `@latest is not a version pin — supply chain risk`,
+            detail: `Use uvx package==1.2.3 with an exact version instead of @latest`,
+          });
+        } else if (!/==/.test(fullCmd) && !/@\d/.test(fullCmd)) {
           issues.push({
             type: 'missing-version-pin',
             severity: 'warning',
@@ -147,7 +165,7 @@ function parseConfigFile(raw: string, source: 'claude' | 'cursor' | 'vscode', co
       // Check if command path is resolvable
       const isLocalPath = command.startsWith('/') || command.startsWith('./') || command.startsWith('~');
       if (isLocalPath) {
-        const resolved = command.startsWith('~') ? command.replace('~', os.homedir()) : command;
+        const resolved = command.startsWith('~') ? command.replace(/^~/, os.homedir()) : command;
         if (!existsSync(resolved)) {
           issues.push({
             type: 'unscanned-path',
@@ -197,7 +215,7 @@ export class ConfigGuardian {
     if (workspaceFolders) {
       const root = workspaceFolders[0];
 
-      for (const relPath of ['.cursor/mcp.json', '.vscode/mcp.json']) {
+      for (const relPath of ['.cursor/mcp.json', '.vscode/mcp.json', '.windsurf/mcp.json']) {
         const pattern = new vscode.RelativePattern(root, relPath);
         const watcher = vscode.workspace.createFileSystemWatcher(pattern);
         watcher.onDidChange(() => void this._scanAll());
@@ -212,7 +230,7 @@ export class ConfigGuardian {
     const claudePath = getClaudeDesktopConfigPath();
     if (existsSync(claudePath)) {
       const { watchFile, unwatchFile } = require('fs');
-      watchFile(claudePath, { interval: 5000 }, () => void this._scanAll());
+      watchFile(claudePath, { interval: CONFIG_POLL_INTERVAL_MS }, () => void this._scanAll());
       context.subscriptions.push({ dispose: () => unwatchFile(claudePath) });
     }
   }
@@ -234,6 +252,7 @@ export class ConfigGuardian {
       for (const [relPath, source] of [
         ['.cursor/mcp.json', 'cursor'],
         ['.vscode/mcp.json', 'vscode'],
+        ['.windsurf/mcp.json', 'windsurf'],
       ] as const) {
         const fullPath = path.join(root, relPath);
         try {

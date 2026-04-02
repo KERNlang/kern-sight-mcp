@@ -8,6 +8,7 @@
 import { spawn, type ChildProcess } from 'child_process';
 import type { ReviewFinding } from '@kernlang/review-mcp';
 import type { SecurityScore } from '@kernlang/review-mcp';
+import { CLIENT_INIT_TIMEOUT_MS, SCAN_TIMEOUT_MS } from './constants';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -80,7 +81,7 @@ export class McpClient {
       protocolVersion: '2024-11-05',
       capabilities: {},
       clientInfo: { name: 'kern-mcp-security-extension', version: '1.0.0' },
-    }, 5000);
+    }, CLIENT_INIT_TIMEOUT_MS);
 
     // Send initialized notification (no response expected)
     this._send('notifications/initialized', {});
@@ -119,7 +120,7 @@ export class McpClient {
   }
 
   /** Call the scan_mcp_server tool. Waits for server ready. */
-  async callTool(source: string, filePath: string, timeoutMs = 10000): Promise<ScanResult> {
+  async callTool(source: string, filePath: string, timeoutMs = SCAN_TIMEOUT_MS): Promise<ScanResult> {
     await this._readyPromise;
 
     const result = await this._request('tools/call', {
