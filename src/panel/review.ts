@@ -6,6 +6,7 @@ import type { McpServerEntry } from '../config-guardian';
 import { buildPermissionManifest } from '../permission-manifest';
 import { buildShell } from './shell';
 import { buildConfigGuardianSection } from './guardian';
+import { buildAbusePathSection } from './abuse-path';
 
 export function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<string>, configServers?: McpServerEntry[], animations = true, scoreDiff?: ScoreDiff | null): string {
   const { fileName, findings, irNodes, lang } = result;
@@ -42,6 +43,8 @@ export function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<stri
     ${irNodes.length > 0 ? buildIRSection(irNodes, result.score) : ''}
 
     ${irNodes.length > 0 ? buildPermissionSection(irNodes) : ''}
+
+    ${irNodes.length > 0 ? buildAbusePathSection(irNodes) : ''}
 
     ${findings.length === 0 ? '<div class="clean-state"><div class="check">&#10003;</div><p>No vulnerabilities found.</p></div>' : ''}
 

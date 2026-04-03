@@ -121,6 +121,10 @@
       {
         "command": "kernMcpSecurity.newKernFromTemplate",
         "title": "KERN: New .kern from Template"
+      },
+      {
+        "command": "kernMcpSecurity.generateSecurityTests",
+        "title": "KERN: Generate Security Tests from .kern"
       }
     ],
     "keybindings": [

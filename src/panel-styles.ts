@@ -1196,6 +1196,24 @@ export const PANEL_CSS = `
   @keyframes sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   @keyframes dots { 0% { content: ''; } 33% { content: '.'; } 66% { content: '..'; } 100% { content: '...'; } }
 
+  /* -- Abuse paths -- */
+  .abuse-summary { color: var(--kern-muted); font-size: 11px; margin: 4px 0 8px; }
+  .abuse-list { display: flex; flex-direction: column; gap: 8px; }
+  .abuse-card { background: var(--kern-surface); border-radius: 8px; padding: 10px 12px; border-left: 3px solid var(--kern-muted); }
+  .abuse-card.bug { border-left-color: var(--kern-red); }
+  .abuse-card.warn { border-left-color: var(--kern-yellow); }
+  .abuse-card.info { border-left-color: var(--kern-blue); }
+  .abuse-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .abuse-icon { font-size: 14px; }
+  .abuse-tool { font-weight: 600; font-size: 12px; }
+  .abuse-line { color: var(--kern-muted); font-size: 10px; }
+  .abuse-flow { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 11px; }
+  .abuse-step { padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 10px; }
+  .abuse-step.param { background: rgba(96, 165, 250, 0.15); color: var(--kern-blue); }
+  .abuse-step.effect { background: rgba(251, 191, 36, 0.15); color: var(--kern-yellow); }
+  .abuse-step.missing { background: rgba(239, 68, 68, 0.15); color: var(--kern-red); font-weight: 600; }
+  .abuse-arrow { color: var(--kern-muted); font-size: 12px; }
+
   /* -- No-animation mode -- */
   .no-animations,
   .no-animations * {

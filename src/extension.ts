@@ -18,6 +18,7 @@ import type { ContextItem } from './context-scanner';
 import { REVIEW_DEBOUNCE_MS, SCAN_TIMEOUT_MS } from './constants';
 import { recordScore } from './score-history';
 import type { ScoreDiff } from './score-history';
+import { generateTestSuites, renderTestFile } from './test-generator';
 
 const SUPPORTED_LANGUAGES = new Set([
   'typescript', 'typescriptreact', 'javascript', 'javascriptreact', 'python',
@@ -289,6 +290,9 @@ export function activate(context: vscode.ExtensionContext): void {
       }),
       vscode.commands.registerCommand('kernMcpSecurity.newKernFromTemplate', () => {
         void createKernTemplate(context.extensionUri);
+      }),
+      vscode.commands.registerCommand('kernMcpSecurity.generateSecurityTests', () => {
+        void generateSecurityTests();
       }),
     );
 
@@ -745,10 +749,21 @@ ${KERN_MCP_SYNTAX}
 
 ## Import-Specific Rules
 - Extract ALL tools, resources, and prompts from the source code
-- If the source has no guards, ADD appropriate ones — this is the whole point of importing
 - INLINE all helper functions, utilities, and external references directly into each handler. Do NOT reference functions defined outside the handler block — the compiled output will not have them
 - INLINE all data structures (objects, arrays, maps, configs) that handlers reference
-- Handler code is JavaScript/TypeScript — use Node.js APIs (fs, path, fetch) directly`;
+- Handler code is JavaScript/TypeScript — use Node.js APIs (fs, path, fetch) directly
+
+## CRITICAL: Guard Injection — Analyze Effects and Add Matching Guards
+The ENTIRE POINT of importing to .kern is to ADD security guards. Analyze each handler's code for dangerous effects and add the correct guard type:
+- File reads/writes (readFile, readFileSync, writeFile, readdir, etc.) → add \`guard type=pathContainment param=PARAM baseDir="./SAFE_DIR"\`
+- Shell execution (exec, spawn, execSync, child_process) → add \`guard type=sanitize param=PARAM\` on ALL params flowing to the command
+- Network requests (fetch, http.request, axios) → add \`guard type=validate param=PARAM pattern="^https://ALLOWED_DOMAIN/"\`
+- Database queries (query, execute, run) → add \`guard type=sanitize param=PARAM\` on ALL params used in queries
+- For ALL string params: add \`guard type=sanitize param=PARAM\`
+- For ALL tools with external effects: add \`guard type=rateLimit window=60000 requests=100\`
+- If the server uses HTTP/SSE transport: add \`guard type=auth\` on sensitive tools
+- Add \`guard type=sanitizeOutput\` on tools that return external data to the LLM
+Do NOT just add a single sanitize guard and call it done. Each effect type needs its specific guard.`;
 
 async function importToKern(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
@@ -781,14 +796,52 @@ async function importToKern(): Promise<void> {
 
     try {
       const ast = parse(cleaned);
-      // Verify AI actually added guards — check each tool has at least one guard child
       const tools = (ast.children ?? []).filter(n => n.type === 'tool');
-      const unguarded = tools.filter(t => !(t.children ?? []).some(c => c.type === 'guard'));
-      if (unguarded.length > 0) {
-        const names = unguarded.map(t => t.props?.name || 'unnamed').join(', ');
-        outputChannel.appendLine(`[Import] Warning: ${unguarded.length} tool(s) have no guards: ${names}`);
+      const warnings: string[] = [];
+
+      // Check each tool for: no guards at all, or file I/O without pathContainment
+      for (const tool of tools) {
+        const name = (tool.props?.name as string) || 'unnamed';
+        const guards = (tool.children ?? []).filter(c => c.type === 'guard');
+        const handler = (tool.children ?? []).find(c => c.type === 'handler');
+        const handlerCode = (handler?.props?.code as string) || '';
+
+        if (guards.length === 0) {
+          warnings.push(`${name}: no guards`);
+          continue;
+        }
+
+        const guardKinds = new Set(guards.map(g => (g.props?.type as string) || ''));
+        const hasPathContainment = guardKinds.has('pathContainment');
+        const hasSanitizeOutput = guardKinds.has('sanitizeOutput');
+
+        const hasSanitize = guardKinds.has('sanitize');
+
+        // Detect file I/O without pathContainment
+        if (!hasPathContainment && /\b(readFile|readFileSync|writeFile|writeFileSync|readdir|readdirSync|unlink|unlinkSync|createReadStream|createWriteStream)\b/.test(handlerCode)) {
+          warnings.push(`${name}: file I/O without pathContainment guard`);
+        }
+
+        // Detect shell execution without sanitize
+        if (!hasSanitize && /\b(execSync|execFile|execFileSync|spawn|spawnSync|child_process)\b/.test(handlerCode)) {
+          warnings.push(`${name}: shell execution without sanitize guard`);
+        }
+
+        // Detect database queries without sanitize
+        if (!hasSanitize && /\b(\.query|\.execute|\.run)\s*\(/.test(handlerCode)) {
+          warnings.push(`${name}: database query without sanitize guard`);
+        }
+
+        // Detect external data returned without sanitizeOutput
+        if (!hasSanitizeOutput && /\b(fetch|http\.request|axios|got\.get|got\.post|got\.put)\b/.test(handlerCode)) {
+          warnings.push(`${name}: returns external data without sanitizeOutput guard`);
+        }
+      }
+
+      if (warnings.length > 0) {
+        outputChannel.appendLine(`[Import] Guard warnings:\n  ${warnings.join('\n  ')}`);
         sidebarProvider.showBuildMode(`${fileName} → .kern`, true,
-          `${unguarded.length} tool(s) missing guards (${names}) — add guards before compiling`);
+          `${warnings.length} guard issue(s) — review before compiling: ${warnings.join('; ')}`);
       } else {
         sidebarProvider.showBuildMode(`${fileName} → .kern`, true);
       }
@@ -968,6 +1021,42 @@ async function createKernTemplate(extensionUri: vscode.Uri): Promise<void> {
       language: 'kern',
     });
     await vscode.window.showTextDocument(doc);
+  }
+}
+
+// ── Security Test Generation ─────────────────────────────────────────
+
+async function generateSecurityTests(): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.languageId !== 'kern') {
+    vscode.window.showWarningMessage('Open a .kern file to generate security tests');
+    return;
+  }
+
+  const source = editor.document.getText();
+  const fileName = path.basename(editor.document.fileName, '.kern');
+
+  try {
+    const ast = parse(source);
+    const suites = generateTestSuites(ast);
+
+    if (suites.length === 0) {
+      vscode.window.showWarningMessage('No tools found in .kern file');
+      return;
+    }
+
+    const totalCases = suites.reduce((sum, s) => sum + s.cases.length, 0);
+    const testCode = renderTestFile(suites, `./${fileName}`);
+
+    const doc = await vscode.workspace.openTextDocument({ content: testCode, language: 'typescript' });
+    await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside });
+
+    outputChannel.appendLine(`[TestGen] Generated ${totalCases} test cases for ${suites.length} tool(s)`);
+    vscode.window.showInformationMessage(`Generated ${totalCases} security tests for ${suites.length} tool(s)`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    outputChannel.appendLine(`[TestGen] Failed: ${msg}`);
+    vscode.window.showErrorMessage(`Test generation failed: ${msg}`);
   }
 }
 
