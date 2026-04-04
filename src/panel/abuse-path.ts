@@ -37,12 +37,12 @@ const KIND_LABELS: Record<string, string> = {
 };
 
 const KIND_ICONS: Record<string, string> = {
-  'fs': '&#128196;',
-  'file-read': '&#128196;',
-  'file-write': '&#9997;',
-  'shell-exec': '&#9888;',
-  'network': '&#127760;',
-  'db': '&#128451;',
+  'fs': '&#9112;',
+  'file-read': '&#9112;',
+  'file-write': '&#9998;',
+  'shell-exec': '&#9656;',
+  'network': '&#8645;',
+  'db': '&#9638;',
 };
 
 export function computeAbusePaths(irNodes: IRNode[]): AbusePath[] {
@@ -86,7 +86,7 @@ export function buildAbusePathSection(irNodes: IRNode[], filePath?: string): str
   const fp = filePath ? escapeHTML(filePath) : '';
 
   const cards = paths.map(p => {
-    const icon = KIND_ICONS[p.effectKind] ?? '&#9889;';
+    const icon = KIND_ICONS[p.effectKind] ?? '&#9679;';
     const label = KIND_LABELS[p.effectKind] ?? p.effectKind;
     const sevClass = p.severity === 'critical' ? 'bug' : p.severity === 'high' ? 'warn' : 'info';
     const guardList = p.missingGuards.map(g => `<code>${escapeHTML(g)}</code>`).join(', ');

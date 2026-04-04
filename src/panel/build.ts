@@ -33,7 +33,7 @@ export function buildBuildModeHTML(fileName: string, syntaxValid: boolean, error
 
     <div class="build-actions" style="margin-top:8px;">
       <button class="build-btn" style="background:var(--kern-surface);border:1px solid var(--border);" onclick="vscode.postMessage({type:'generateTests'})">
-        <span class="build-btn-icon">&#128295;</span> Generate Security Tests
+        <span class="build-btn-icon">&#9881;</span> Generate Security Tests
       </button>
     </div>
 
@@ -122,7 +122,7 @@ function buildFindingHTMLSimple(f: import('./shared').ReviewFinding, index: numb
   const actionBtns: string[] = [];
   const hasSafeFix = safeFixRules?.has(f.ruleId);
   if (hasSafeFix) {
-    actionBtns.push(`<button class="finding-action-btn fix-btn" data-action="applyFix" data-filepath="${escapeHTML(fp)}" data-line="${line}" data-ruleid="${escapeHTML(f.ruleId)}">&#9889; FIX</button>`);
+    actionBtns.push(`<button class="finding-action-btn fix-btn" data-action="applyFix" data-filepath="${escapeHTML(fp)}" data-line="${line}" data-ruleid="${escapeHTML(f.ruleId)}">&#9656; FIX</button>`);
   }
   if (f.suggestion) {
     actionBtns.push(`<button class="finding-action-btn" data-action="copySuggestion" data-suggestion="${escapeHTML(f.suggestion)}">COPY</button>`);

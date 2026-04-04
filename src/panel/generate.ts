@@ -3,12 +3,12 @@ import { buildShell } from './shell';
 
 export function buildGenerateHTML(contextItems: { id: string; label: string; category: string; preview: string }[], engines: { id: string; label: string; available: boolean }[], animations = true): string {
   const categoryIcons: Record<string, string> = {
-    project: '&#128230;',
-    schema: '&#128451;',
-    api: '&#9889;',
-    env: '&#128273;',
+    project: '&#9744;',
+    schema: '&#9638;',
+    api: '&#8645;',
+    env: '&#9881;',
     kern: '&#9733;',
-    spec: '&#128196;',
+    spec: '&#9112;',
   };
 
   const selected = engines.find(e => e.available) ?? engines[0];
@@ -22,7 +22,7 @@ export function buildGenerateHTML(contextItems: { id: string; label: string; cat
     ? contextItems.map(item => `
         <label class="context-item">
           <input type="checkbox" class="context-check" data-id="${escapeHTML(item.id)}" checked>
-          <span class="context-icon">${categoryIcons[item.category] ?? '&#128196;'}</span>
+          <span class="context-icon">${categoryIcons[item.category] ?? '&#9112;'}</span>
           <span class="context-label">${escapeHTML(item.label)}</span>
           <span class="context-preview">${escapeHTML(item.preview)}</span>
         </label>`).join('')
@@ -59,7 +59,7 @@ export function buildGenerateHTML(contextItems: { id: string; label: string; cat
         const engineId = document.getElementById('selected-engine').value;
         vscode.postMessage({type:'generate', description: desc, contextIds: ids, engineId: engineId});
       ">
-        <span class="build-btn-icon">&#10024;</span> Generate .kern <span class="beta-tag">BETA</span>
+        <span class="build-btn-icon">&#10022;</span> Generate .kern <span class="beta-tag">BETA</span>
       </button>
     </div>
 
@@ -68,7 +68,7 @@ export function buildGenerateHTML(contextItems: { id: string; label: string; cat
     </div>
     <div class="build-actions">
       <button class="build-btn" style="background:var(--kern-surface);border:1px solid var(--border);" onclick="vscode.postMessage({type:'newFromTemplate'})">
-        <span class="build-btn-icon">&#128196;</span> New from Template
+        <span class="build-btn-icon">&#9112;</span> New from Template
       </button>
     </div>
 
@@ -112,7 +112,7 @@ export function buildImportModeHTML(fileName: string, lang: 'typescript' | 'pyth
 
     <div class="build-actions">
       <button class="build-btn" onclick="vscode.postMessage({type:'importToKern'})">
-        <span class="build-btn-icon">&#10024;</span> Import to .kern <span class="beta-tag">BETA</span>
+        <span class="build-btn-icon">&#10022;</span> Import to .kern <span class="beta-tag">BETA</span>
       </button>
       <button class="build-btn" onclick="vscode.postMessage({type:'convertTarget'})">
         <span class="build-btn-icon">&#8644;</span> Convert to ${escapeHTML(targetLabel)} <span class="beta-tag">BETA</span>
@@ -128,7 +128,7 @@ export function buildImportModeHTML(fileName: string, lang: 'typescript' | 'pyth
     </div>
     <div class="build-actions">
       <button class="build-btn" style="background:var(--kern-surface);border:1px solid var(--border);" onclick="vscode.postMessage({type:'newFromTemplate'})">
-        <span class="build-btn-icon">&#128196;</span> New from Template
+        <span class="build-btn-icon">&#9112;</span> New from Template
       </button>
     </div>
 

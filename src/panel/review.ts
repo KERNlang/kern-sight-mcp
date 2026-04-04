@@ -64,7 +64,7 @@ export function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<stri
     ${result.score ? `
     <div class="build-actions" style="margin-top:16px;">
       <button class="build-btn" style="background:var(--kern-surface);border:1px solid var(--border);font-size:10px;" onclick="vscode.postMessage({type:'generateBadge'})">
-        <span class="build-btn-icon">&#127942;</span> Generate README Badge
+        <span class="build-btn-icon">&#9733;</span> Generate README Badge
       </button>
     </div>` : ''}
 
@@ -162,7 +162,7 @@ function buildIRSection(irNodes: IRNode[], score?: SecurityScore): string {
       .filter(c => c.type === 'effect' || c.type === 'guard')
       .map((c) => {
         const kind = (c.props?.kind as string) || '';
-        const icon = c.type === 'effect' ? '&#9889;' : '&#9989;';
+        const icon = c.type === 'effect' ? '&#9656;' : '&#10003;';
         const cls = c.type === 'effect' ? 'ir-child-effect' : 'ir-child-guard';
         return `<div class="ir-child ${cls}"><span class="ir-child-icon">${icon}</span><span class="ir-child-type">${c.type}</span><span class="ir-child-kind">${escapeHTML(kind)}</span></div>`;
       }).join('');
@@ -206,7 +206,7 @@ function buildFindingHTML(f: import('./shared').ReviewFinding, index: number, re
   const actionBtns: string[] = [];
   const hasSafeFix = safeFixRules?.has(f.ruleId);
   if (hasSafeFix) {
-    actionBtns.push(`<button class="finding-action-btn fix-btn" data-action="applyFix" data-filepath="${escapeHTML(fp)}" data-line="${line}" data-ruleid="${escapeHTML(f.ruleId)}">&#9889; FIX</button>`);
+    actionBtns.push(`<button class="finding-action-btn fix-btn" data-action="applyFix" data-filepath="${escapeHTML(fp)}" data-line="${line}" data-ruleid="${escapeHTML(f.ruleId)}">&#9656; FIX</button>`);
   }
   if (f.suggestion) {
     actionBtns.push(`<button class="finding-action-btn" data-action="copySuggestion" data-suggestion="${escapeHTML(f.suggestion)}">COPY</button>`);
@@ -247,14 +247,14 @@ function buildPermissionSection(irNodes: IRNode[]): string {
   if (kinds.length === 0) return '';
 
   const kindIcons: Record<string, string> = {
-    'file-read': '&#128196;', 'file-write': '&#9997;', 'shell-exec': '&#9000;',
-    'network-fetch': '&#127760;', 'database-query': '&#128451;',
+    'file-read': '&#9112;', 'file-write': '&#9998;', 'shell-exec': '&#9656;',
+    'network-fetch': '&#8645;', 'database-query': '&#9638;',
   };
 
   const cards = kinds.map(kind => {
     const { guarded, unguarded } = manifest.byKind[kind];
     const total = guarded + unguarded;
-    const icon = kindIcons[kind] ?? '&#9889;';
+    const icon = kindIcons[kind] ?? '&#9679;';
     const cls = unguarded > 0 ? 'unguarded' : 'guarded';
     return `<div class="perm-card ${cls}">
       <span class="perm-icon">${icon}</span>

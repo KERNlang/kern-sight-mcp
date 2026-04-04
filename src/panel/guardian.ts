@@ -18,7 +18,7 @@ export function buildConfigGuardianSection(servers: McpServerEntry[]): string {
   const serverCards = servers.map((s) => {
     const issueList = s.issues.map((issue) => {
       const sevClass = issue.severity === 'error' ? 'bug' : issue.severity === 'warning' ? 'warn' : 'info';
-      return `<div class="guardian-issue ${sevClass}"><span class="guardian-issue-icon">${issue.severity === 'error' ? '&#9888;' : '&#9432;'}</span>${escapeHTML(issue.message)}</div>`;
+      return `<div class="guardian-issue ${sevClass}"><span class="guardian-issue-icon">${issue.severity === 'error' ? '&#9650;' : '&#9679;'}</span>${escapeHTML(issue.message)}</div>`;
     }).join('');
 
     return `
