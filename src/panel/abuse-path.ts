@@ -79,18 +79,22 @@ export function computeAbusePaths(irNodes: IRNode[]): AbusePath[] {
   return paths;
 }
 
-export function buildAbusePathSection(irNodes: IRNode[]): string {
+export function buildAbusePathSection(irNodes: IRNode[], filePath?: string): string {
   const paths = computeAbusePaths(irNodes);
   if (paths.length === 0) return '';
+
+  const fp = filePath ? escapeHTML(filePath) : '';
 
   const cards = paths.map(p => {
     const icon = KIND_ICONS[p.effectKind] ?? '&#9889;';
     const label = KIND_LABELS[p.effectKind] ?? p.effectKind;
     const sevClass = p.severity === 'critical' ? 'bug' : p.severity === 'high' ? 'warn' : 'info';
     const guardList = p.missingGuards.map(g => `<code>${escapeHTML(g)}</code>`).join(', ');
+    const line = p.effectLine ?? 1;
     const lineRef = p.effectLine ? ` <span class="abuse-line">L${p.effectLine}</span>` : '';
+    const clickAttr = fp ? `class="abuse-card finding ${sevClass}" data-line="${line}" data-col="1" data-filepath="${fp}" style="cursor:pointer"` : `class="abuse-card ${sevClass}"`;
 
-    return `<div class="abuse-card ${sevClass}">
+    return `<div ${clickAttr}>
       <div class="abuse-header">
         <span class="abuse-icon">${icon}</span>
         <span class="abuse-tool">${escapeHTML(p.toolName)}</span>${lineRef}

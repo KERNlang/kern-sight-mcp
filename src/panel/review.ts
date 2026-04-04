@@ -44,7 +44,7 @@ export function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<stri
 
     ${irNodes.length > 0 ? buildPermissionSection(irNodes) : ''}
 
-    ${irNodes.length > 0 ? buildAbusePathSection(irNodes) : ''}
+    ${irNodes.length > 0 ? buildAbusePathSection(irNodes, result.filePath) : ''}
 
     ${findings.length === 0 ? '<div class="clean-state"><div class="check">&#10003;</div><p>No vulnerabilities found.</p></div>' : ''}
 
