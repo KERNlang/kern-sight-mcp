@@ -148,7 +148,7 @@ async function generateWithCLI(
     }
     case 'codex-cli':
       log('[AI] Running codex...');
-      output = await spawnWithStdin('codex', ['exec', '--skip-git-repo-check', '-'], fullPrompt, AI_CLI_TIMEOUT_MS);
+      output = await spawnWithStdin('codex', ['exec', '--full-auto', '--skip-git-repo-check', '-'], fullPrompt, AI_CLI_TIMEOUT_MS);
       break;
     case 'gemini-cli':
       log('[AI] Running gemini...');
