@@ -621,8 +621,19 @@ function showBuildModeForEditor(editor: vscode.TextEditor): void {
 let detectedEngines: AIEngine[] = [];
 
 async function showGenerateMode(): Promise<void> {
-  scannedContext = await scanWorkspaceContext();
-  detectedEngines = await detectEngines();
+  // Show immediately with cached data (or empty) — no flash of "not MCP"
+  sidebarProvider.showGenerateMode(
+    scannedContext.map(c => ({ id: c.id, label: c.label, category: c.category, preview: c.preview })),
+    detectedEngines,
+  );
+
+  // Then refresh context + engines in background and re-render
+  const [newContext, newEngines] = await Promise.all([
+    scanWorkspaceContext(),
+    detectedEngines.length > 0 ? Promise.resolve(detectedEngines) : detectEngines(),
+  ]);
+  scannedContext = newContext;
+  detectedEngines = newEngines;
   sidebarProvider.showGenerateMode(
     scannedContext.map(c => ({ id: c.id, label: c.label, category: c.category, preview: c.preview })),
     detectedEngines,
