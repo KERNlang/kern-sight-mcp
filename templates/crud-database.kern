@@ -8,6 +8,8 @@ mcp name=DatabaseCRUD version=1.0
     guard type=sanitize param=table
     guard type=validate param=limit min=1 max=100
     guard type=validate param=offset min=0
+    guard type=rateLimit window=60000 requests=100
+    guard type=sanitizeOutput
     handler <<<
       const rows = await db.query(
         `SELECT * FROM ${args.table} LIMIT $1 OFFSET $2`,
@@ -22,6 +24,8 @@ mcp name=DatabaseCRUD version=1.0
     param name=id type=string required=true
     guard type=sanitize param=table
     guard type=sanitize param=id
+    guard type=rateLimit window=60000 requests=100
+    guard type=sanitizeOutput
     handler <<<
       const row = await db.query(
         `SELECT * FROM ${args.table} WHERE id = $1`,
@@ -37,6 +41,8 @@ mcp name=DatabaseCRUD version=1.0
     guard type=sanitize param=table
     guard type=sizeLimit param=data maxBytes=65536
     guard type=rateLimit window=60000 requests=30
+    guard type=auth method=bearer
+    guard type=sanitizeOutput
     handler <<<
       const parsed = JSON.parse(args.data);
       const keys = Object.keys(parsed);
@@ -56,6 +62,8 @@ mcp name=DatabaseCRUD version=1.0
     guard type=sanitize param=table
     guard type=sanitize param=id
     guard type=auth method=bearer
+    guard type=rateLimit window=60000 requests=30
+    guard type=sanitizeOutput
     handler <<<
       await db.query(`DELETE FROM ${args.table} WHERE id = $1`, [args.id]);
       return { content: [{ type: "text", text: "Deleted" }] };
