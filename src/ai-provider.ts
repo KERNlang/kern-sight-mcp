@@ -147,7 +147,7 @@ async function generateWithCLI(
     }
     case 'codex-cli':
       log('[AI] Running codex...');
-      output = await spawnWithStdin('codex', ['-q'], fullPrompt, AI_CLI_TIMEOUT_MS);
+      output = await spawnWithStdin('codex', ['exec', '-'], fullPrompt, AI_CLI_TIMEOUT_MS);
       break;
     case 'gemini-cli':
       log('[AI] Running gemini...');
@@ -159,7 +159,7 @@ async function generateWithCLI(
       break;
     case 'opencode':
       log('[AI] Running opencode...');
-      output = await spawnWithStdin('opencode', ['-p'], fullPrompt, AI_CLI_TIMEOUT_MS);
+      output = await spawnWithStdin('opencode', ['--prompt', fullPrompt], '', AI_CLI_TIMEOUT_MS);
       break;
     default:
       throw new Error(`Unknown engine: ${engineId}`);
