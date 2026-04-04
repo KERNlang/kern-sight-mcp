@@ -285,6 +285,6 @@
   "dependencies": {
     "@kernlang/core": "file:../kern-lang/packages/core",
     "@kernlang/mcp": "file:../kern-lang/packages/mcp",
-    "@kernlang/review-mcp": "^3.1.5"
+    "@kernlang/review-mcp": "file:../kern-lang/packages/review-mcp"
   }
 }
