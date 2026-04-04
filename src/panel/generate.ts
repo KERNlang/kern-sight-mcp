@@ -63,6 +63,15 @@ export function buildGenerateHTML(contextItems: { id: string; label: string; cat
       </button>
     </div>
 
+    <div style="text-align:center;margin:16px 0 8px;">
+      <span style="color:var(--text-muted);font-size:10px;">or</span>
+    </div>
+    <div class="build-actions">
+      <button class="build-btn" style="background:var(--kern-surface);border:1px solid var(--border);" onclick="vscode.postMessage({type:'newFromTemplate'})">
+        <span class="build-btn-icon">&#128196;</span> New from Template
+      </button>
+    </div>
+
     <div class="footer"><span class="brand-kern-sm">KERN</span> <span class="brand-mcp-sm">MCP</span> · <a href="https://kernlang.dev" style="color:var(--text-muted);text-decoration:none;border-bottom:1px solid var(--border);">kernlang.dev</a></div>
   `, { animations, activeMode: 'build' });
 }
@@ -112,6 +121,15 @@ export function buildImportModeHTML(fileName: string, lang: 'typescript' | 'pyth
 
     <div class="build-hint">
       <span style="color:var(--text-muted);font-size:10px;">AI-assisted — review output before shipping</span>
+    </div>
+
+    <div style="text-align:center;margin:16px 0 8px;">
+      <span style="color:var(--text-muted);font-size:10px;">or start fresh</span>
+    </div>
+    <div class="build-actions">
+      <button class="build-btn" style="background:var(--kern-surface);border:1px solid var(--border);" onclick="vscode.postMessage({type:'newFromTemplate'})">
+        <span class="build-btn-icon">&#128196;</span> New from Template
+      </button>
     </div>
 
     <div class="footer"><span class="brand-kern-sm">KERN</span> <span class="brand-mcp-sm">MCP</span> · <a href="https://kernlang.dev" style="color:var(--text-muted);text-decoration:none;border-bottom:1px solid var(--border);">kernlang.dev</a></div>

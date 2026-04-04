@@ -29,6 +29,7 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
   public onCompileRequested?: (target: 'typescript' | 'python') => void;
   public onValidateRequested?: () => void;
   public onCreateKernRequested?: () => void;
+  public onNewFromTemplateRequested?: () => void;
   public onGenerateRequested?: (description: string, selectedContextIds: string[], engineId?: string) => void;
   public onScanContextRequested?: () => void;
   public onModeChanged?: (mode: 'review' | 'build') => void;
@@ -71,6 +72,8 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
         this.onGenerateRequested?.(msg.description, msg.contextIds, msg.engineId);
       } else if (msg.type === 'scanContext') {
         this.onScanContextRequested?.();
+      } else if (msg.type === 'newFromTemplate') {
+        this.onNewFromTemplateRequested?.();
       } else if (msg.type === 'importToKern') {
         this.onImportToKernRequested?.();
       } else if (msg.type === 'convertTarget') {

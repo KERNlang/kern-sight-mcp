@@ -101,6 +101,10 @@ export function activate(context: vscode.ExtensionContext): void {
       void showGenerateMode();
     };
 
+    sidebarProvider.onNewFromTemplateRequested = () => {
+      void createKernTemplate(context.extensionUri);
+    };
+
     sidebarProvider.onScanContextRequested = () => {
       void showGenerateMode();
     };
