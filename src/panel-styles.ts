@@ -1196,6 +1196,17 @@ export const PANEL_CSS = `
   @keyframes sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   @keyframes dots { 0% { content: ''; } 33% { content: '.'; } 66% { content: '..'; } 100% { content: '...'; } }
 
+  /* -- Scanned files -- */
+  .scanned-list { display: flex; flex-direction: column; gap: 2px; }
+  .scanned-file { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  .scanned-file:hover { background: var(--kern-surface); }
+  .scanned-file.current { background: rgba(96, 165, 250, 0.1); border-left: 2px solid var(--kern-blue); }
+  .scanned-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 10px; }
+  .scanned-grade { font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px; background: var(--kern-surface); }
+  .scanned-count { font-size: 10px; font-weight: 600; min-width: 16px; text-align: right; }
+  .scanned-count.clean { color: var(--kern-green); }
+  .scanned-count.warns { color: var(--kern-yellow); }
+
   /* -- Abuse paths -- */
   .abuse-summary { color: var(--kern-muted); font-size: 11px; margin: 4px 0 8px; }
   .abuse-list { display: flex; flex-direction: column; gap: 8px; }

@@ -8,7 +8,9 @@ import { buildShell } from './shell';
 import { buildConfigGuardianSection } from './guardian';
 import { buildAbusePathSection } from './abuse-path';
 
-export function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<string>, configServers?: McpServerEntry[], animations = true, scoreDiff?: ScoreDiff | null): string {
+export interface ScannedFile { name: string; path: string; count: number; grade?: string; }
+
+export function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<string>, configServers?: McpServerEntry[], animations = true, scoreDiff?: ScoreDiff | null, scannedFiles?: ScannedFile[]): string {
   const { fileName, findings, irNodes, lang } = result;
   const bugs = findings.filter((f) => f.severity === 'error');
   const warnings = findings.filter((f) => f.severity === 'warning');
@@ -66,8 +68,27 @@ export function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<stri
       </button>
     </div>` : ''}
 
+    ${scannedFiles && scannedFiles.length > 1 ? buildScannedFilesSection(scannedFiles, result.filePath) : ''}
+
     <div class="footer"><span class="brand-kern-sm">KERN</span> <span class="brand-mcp-sm">MCP</span> · <a href="https://kernlang.dev" style="color:var(--text-muted);text-decoration:none;border-bottom:1px solid var(--border);">kernlang.dev</a></div>
   `, { animations });
+}
+
+function buildScannedFilesSection(files: ScannedFile[], currentPath: string): string {
+  const items = files.map(f => {
+    const isCurrent = f.path === currentPath;
+    const countClass = f.count === 0 ? 'clean' : f.count > 0 ? 'warns' : '';
+    const gradeHtml = f.grade ? `<span class="scanned-grade">${escapeHTML(f.grade)}</span>` : '';
+    return `<div class="scanned-file${isCurrent ? ' current' : ''}" data-filepath="${escapeHTML(f.path)}" onclick="vscode.postMessage({type:'jumpToLine', line:1, col:1, filePath:'${escapeHTML(f.path)}'})">
+      <span class="scanned-name">${escapeHTML(f.name)}</span>
+      ${gradeHtml}
+      <span class="scanned-count ${countClass}">${f.count}</span>
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="section-label" style="margin-top:16px;">SCANNED FILES</div>
+    <div class="scanned-list">${items}</div>`;
 }
 
 export function buildScoreHero(score: SecurityScore, scoreDiff?: ScoreDiff | null): string {

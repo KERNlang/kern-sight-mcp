@@ -21,6 +21,7 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
   private _scoreDiff: ScoreDiff | null = null;
   private _jumping = false;
   private _configServers: McpServerEntry[] = [];
+  private _scannedFiles: { name: string; path: string; count: number; grade?: string }[] = [];
   private _mode: 'review' | 'build' = 'review';
   public safeFixRules: Set<string> = new Set();
   public onScanRequested?: () => void;
@@ -158,6 +159,10 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
     this._view.webview.html = buildCompilingHTML(fileName, target, animations);
   }
 
+  updateScannedFiles(files: { name: string; path: string; count: number; grade?: string }[]): void {
+    this._scannedFiles = files;
+  }
+
   updateConfigGuardian(servers: McpServerEntry[]): void {
     this._configServers = servers;
     // Don't re-render if we're in build mode — config updates shouldn't reset the BUILD screen
@@ -172,7 +177,7 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
     if (this._mode === 'build') return;
     const animations = vscode.workspace.getConfiguration('kernMcpSecurity').get<boolean>('animations', true);
     if (this._current) {
-      this._view.webview.html = buildReviewHTML(this._current, this.safeFixRules, this._configServers, animations, this._scoreDiff);
+      this._view.webview.html = buildReviewHTML(this._current, this.safeFixRules, this._configServers, animations, this._scoreDiff, this._scannedFiles);
     } else {
       this._view.webview.html = buildNotMcpHTML(this._configServers, animations);
     }

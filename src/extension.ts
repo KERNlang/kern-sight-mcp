@@ -16,7 +16,7 @@ import type { AIEngine } from './ai-provider';
 import { scanWorkspaceContext } from './context-scanner';
 import type { ContextItem } from './context-scanner';
 import { REVIEW_DEBOUNCE_MS, SCAN_TIMEOUT_MS } from './constants';
-import { recordScore } from './score-history';
+import { recordScore, getLastScore } from './score-history';
 import type { ScoreDiff } from './score-history';
 import { generateTestSuites, renderTestFile } from './test-generator';
 
@@ -437,6 +437,7 @@ async function reviewDocument(document: vscode.TextDocument): Promise<void> {
     const findings = filterFindings(result.findings, config.severity);
     const diagnostics = findings.map((f) => findingToDiagnostic(f, currentDoc));
     diagnosticCollection.set(uri, diagnostics);
+    updateScannedFilesList();
     outputChannel.appendLine(`[${fileName}] ${findings.length} finding(s), ${(result.irNodes ?? []).length} IR nodes (${lang})`);
 
     const reviewResult: McpReviewResult = {
@@ -483,6 +484,22 @@ async function reviewDocument(document: vscode.TextDocument): Promise<void> {
       }
     }
   }
+}
+
+function updateScannedFilesList(): void {
+  const files: { name: string; path: string; count: number; grade?: string }[] = [];
+  diagnosticCollection.forEach((uri, diagnostics) => {
+    const p = uri.fsPath;
+    const lastScore = getLastScore(workspaceState, p);
+    files.push({
+      name: path.basename(p),
+      path: p,
+      count: diagnostics.length,
+      grade: lastScore?.grade,
+    });
+  });
+  files.sort((a, b) => b.count - a.count);
+  sidebarProvider.updateScannedFiles(files);
 }
 
 function updateStatusBar(state: 'idle' | 'analyzing' | 'done' | 'error' | 'kern' | 'building' | 'built', count: number, grade?: string): void {
