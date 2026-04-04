@@ -78,6 +78,10 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
         this.onImportToKernRequested?.();
       } else if (msg.type === 'convertTarget') {
         this.onConvertTargetRequested?.();
+      } else if (msg.type === 'generateTests') {
+        vscode.commands.executeCommand('kernMcpSecurity.generateSecurityTests');
+      } else if (msg.type === 'generateBadge') {
+        vscode.commands.executeCommand('kernMcpSecurity.generateBadge');
       } else if (msg.type === 'openSettings') {
         void vscode.commands.executeCommand('workbench.action.openSettings', 'kernMcpSecurity.ai');
       } else if (msg.type === 'switchMode') {

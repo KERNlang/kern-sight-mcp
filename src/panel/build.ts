@@ -31,8 +31,14 @@ export function buildBuildModeHTML(fileName: string, syntaxValid: boolean, error
       </button>
     </div>
 
+    <div class="build-actions" style="margin-top:8px;">
+      <button class="build-btn" style="background:var(--kern-surface);border:1px solid var(--border);" onclick="vscode.postMessage({type:'generateTests'})">
+        <span class="build-btn-icon">&#128295;</span> Generate Security Tests
+      </button>
+    </div>
+
     <div class="build-hint">
-      <span style="color:var(--text-muted);font-size:10px;">Compiled output is auto-reviewed with 13 OWASP MCP rules</span>
+      <span style="color:var(--text-muted);font-size:10px;">Compiled output is auto-reviewed with 12 OWASP MCP rules</span>
     </div>
 
     <div class="footer"><span class="brand-kern-sm">KERN</span> <span class="brand-mcp-sm">MCP</span> · <a href="https://kernlang.dev" style="color:var(--text-muted);text-decoration:none;border-bottom:1px solid var(--border);">kernlang.dev</a></div>

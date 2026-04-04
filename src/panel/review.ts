@@ -59,6 +59,13 @@ export function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<stri
 
     ${configServers && configServers.length > 0 ? buildConfigGuardianSection(configServers) : ''}
 
+    ${result.score ? `
+    <div class="build-actions" style="margin-top:16px;">
+      <button class="build-btn" style="background:var(--kern-surface);border:1px solid var(--border);font-size:10px;" onclick="vscode.postMessage({type:'generateBadge'})">
+        <span class="build-btn-icon">&#127942;</span> Generate README Badge
+      </button>
+    </div>` : ''}
+
     <div class="footer"><span class="brand-kern-sm">KERN</span> <span class="brand-mcp-sm">MCP</span> · <a href="https://kernlang.dev" style="color:var(--text-muted);text-decoration:none;border-bottom:1px solid var(--border);">kernlang.dev</a></div>
   `, { animations });
 }

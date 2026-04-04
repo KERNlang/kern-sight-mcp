@@ -205,6 +205,16 @@
           "command": "kernMcpSecurity.convertTarget",
           "group": "kern@5",
           "when": "resourceLangId == typescript || resourceLangId == javascript || resourceLangId == python"
+        },
+        {
+          "command": "kernMcpSecurity.generateSecurityTests",
+          "group": "kern@4",
+          "when": "resourceLangId == kern"
+        },
+        {
+          "command": "kernMcpSecurity.newKernFromTemplate",
+          "group": "kern@5",
+          "when": "resourceLangId == kern"
         }
       ]
     },
