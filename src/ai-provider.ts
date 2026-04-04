@@ -97,11 +97,12 @@ export async function generateWithEngine(
 
 function spawnWithStdin(cmd: string, args: string[], input: string, timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
+    const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     const proc = spawn(cmd, args, {
       env: { ...process.env, NO_COLOR: '1' },
       stdio: ['pipe', 'pipe', 'pipe'],
-      // Match commandExists(): use shell on Windows to resolve .cmd/.bat wrappers.
       shell: process.platform === 'win32',
+      ...(cwd ? { cwd } : {}),
     });
 
     let stdout = '';
@@ -147,7 +148,7 @@ async function generateWithCLI(
     }
     case 'codex-cli':
       log('[AI] Running codex...');
-      output = await spawnWithStdin('codex', ['exec', '-'], fullPrompt, AI_CLI_TIMEOUT_MS);
+      output = await spawnWithStdin('codex', ['exec', '--skip-git-repo-check', '-'], fullPrompt, AI_CLI_TIMEOUT_MS);
       break;
     case 'gemini-cli':
       log('[AI] Running gemini...');
