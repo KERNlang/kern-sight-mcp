@@ -1,7 +1,7 @@
 import { escapeHTML } from './shared';
 import { buildShell } from './shell';
 
-export function buildGenerateHTML(contextItems: { id: string; label: string; category: string; preview: string }[], engines: { id: string; label: string; available: boolean }[], animations = true): string {
+export function buildGenerateHTML(contextItems: { id: string; label: string; category: string; preview: string }[], engines: { id: string; label: string; available: boolean }[], animations = true, promptSuggestions?: string[]): string {
   const categoryIcons: Record<string, string> = {
     project: '&#9744;',
     schema: '&#9638;',
@@ -49,6 +49,10 @@ export function buildGenerateHTML(contextItems: { id: string; label: string; cat
     <div class="context-list">${contextList}</div>
 
     <div class="section-label" style="margin-top:12px;">DESCRIBE YOUR SERVER</div>
+    ${promptSuggestions && promptSuggestions.length > 0 ? `
+    <div class="suggestion-chips">
+      ${promptSuggestions.map(s => `<button class="suggestion-chip" onclick="document.getElementById('gen-description').value = '${escapeHTML(s).replace(/'/g, "\\'")}'; this.parentElement.style.display='none';">${escapeHTML(s)}</button>`).join('')}
+    </div>` : ''}
     <textarea id="gen-description" class="gen-textarea" placeholder="e.g. A Postgres CRUD server for users and posts, with JWT auth, rate limiting, and structured logging..." rows="5"></textarea>
 
     <div class="build-actions" style="margin-top:12px;">

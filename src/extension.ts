@@ -13,7 +13,7 @@ import { reviewMCPSource } from '@kernlang/review-mcp';
 import { McpClient } from './mcp-client';
 import { detectEngines, generateWithEngine } from './ai-provider';
 import type { AIEngine } from './ai-provider';
-import { scanWorkspaceContext } from './context-scanner';
+import { scanWorkspaceContext, generatePromptSuggestions } from './context-scanner';
 import type { ContextItem } from './context-scanner';
 import { REVIEW_DEBOUNCE_MS, SCAN_TIMEOUT_MS } from './constants';
 import { recordScore, getLastScore } from './score-history';
@@ -651,9 +651,11 @@ async function showGenerateMode(): Promise<void> {
   ]);
   scannedContext = newContext;
   detectedEngines = newEngines;
+  const suggestions = generatePromptSuggestions(scannedContext);
   sidebarProvider.showGenerateMode(
     scannedContext.map(c => ({ id: c.id, label: c.label, category: c.category, preview: c.preview })),
     detectedEngines,
+    suggestions,
   );
 }
 

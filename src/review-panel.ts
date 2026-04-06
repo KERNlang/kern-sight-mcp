@@ -127,11 +127,11 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
     this._view.webview.html = buildBuildResultHTML(result, sourceFileName, this.safeFixRules, this._configServers, animations);
   }
 
-  showGenerateMode(contextItems: { id: string; label: string; category: string; preview: string }[], engines: { id: string; label: string; available: boolean }[]): void {
+  showGenerateMode(contextItems: { id: string; label: string; category: string; preview: string }[], engines: { id: string; label: string; available: boolean }[], promptSuggestions?: string[]): void {
     this._current = null;
     if (!this._view) return;
     const animations = vscode.workspace.getConfiguration('kernMcpSecurity').get<boolean>('animations', true);
-    this._view.webview.html = buildGenerateHTML(contextItems, engines, animations);
+    this._view.webview.html = buildGenerateHTML(contextItems, engines, animations, promptSuggestions);
   }
 
   showGenerating(): void {

@@ -1196,6 +1196,11 @@ export const PANEL_CSS = `
   @keyframes sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   @keyframes dots { 0% { content: ''; } 33% { content: '.'; } 66% { content: '..'; } 100% { content: '...'; } }
 
+  /* -- Prompt suggestions -- */
+  .suggestion-chips { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+  .suggestion-chip { background: var(--kern-surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 11px; color: var(--foreground); cursor: pointer; text-align: left; line-height: 1.4; transition: border-color 0.15s; }
+  .suggestion-chip:hover { border-color: var(--kern-orange); }
+
   /* -- Scanned files -- */
   .scanned-list { display: flex; flex-direction: column; gap: 2px; }
   .scanned-file { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
