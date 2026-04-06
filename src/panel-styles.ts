@@ -495,6 +495,8 @@ export const PANEL_CSS = `
     color: var(--text-secondary);
     margin-bottom: 10px;
     line-height: 1.5;
+    word-break: break-word;
+    overflow-wrap: break-word;
   }
 
   /* -- Fix suggestion -- */
@@ -507,6 +509,8 @@ export const PANEL_CSS = `
     border-radius: 5px;
     font-size: 11px;
     color: var(--text-secondary);
+    word-break: break-word;
+    overflow-wrap: break-word;
   }
 
   .fix-label {

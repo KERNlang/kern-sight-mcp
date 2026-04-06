@@ -487,17 +487,30 @@ async function reviewDocument(document: vscode.TextDocument): Promise<void> {
 }
 
 function updateScannedFilesList(): void {
-  const files: { name: string; path: string; count: number; grade?: string }[] = [];
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
+  const raw: { name: string; relPath: string; path: string; count: number; grade?: string }[] = [];
   diagnosticCollection.forEach((uri, diagnostics) => {
     const p = uri.fsPath;
     const lastScore = getLastScore(workspaceState, p);
-    files.push({
+    raw.push({
       name: path.basename(p),
+      relPath: root ? path.relative(root, p) : path.basename(p),
       path: p,
       count: diagnostics.length,
       grade: lastScore?.grade,
     });
   });
+
+  // Use relative path when basenames collide
+  const nameCounts = new Map<string, number>();
+  for (const f of raw) nameCounts.set(f.name, (nameCounts.get(f.name) ?? 0) + 1);
+  const files = raw.map(f => ({
+    name: (nameCounts.get(f.name) ?? 0) > 1 ? f.relPath : f.name,
+    path: f.path,
+    count: f.count,
+    grade: f.grade,
+  }));
+
   files.sort((a, b) => b.count - a.count);
   sidebarProvider.updateScannedFiles(files);
 }
