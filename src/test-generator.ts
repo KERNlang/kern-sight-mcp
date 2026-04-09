@@ -156,8 +156,8 @@ export function generateTestSuites(ast: KernNode): ToolTestSuite[] {
 
 export function renderTestFile(suites: ToolTestSuite[], serverPath: string): string {
   const lines: string[] = [];
-  lines.push(`// Auto-generated security tests from .kern definition`);
-  lines.push(`// Tests that guards correctly block malicious inputs`);
+  lines.push(`// Auto-generated security test SCAFFOLD from .kern definition`);
+  lines.push(`// Wire up your compiled server's tool handlers to complete these tests`);
   lines.push(`import { describe, it, expect } from 'vitest';`);
   lines.push(``);
   lines.push(`// TODO: Import your compiled MCP server's tool handlers`);

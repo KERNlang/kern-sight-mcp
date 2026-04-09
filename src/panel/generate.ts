@@ -51,7 +51,7 @@ export function buildGenerateHTML(contextItems: { id: string; label: string; cat
     <div class="section-label" style="margin-top:12px;">DESCRIBE YOUR SERVER</div>
     ${promptSuggestions && promptSuggestions.length > 0 ? `
     <div class="suggestion-chips">
-      ${promptSuggestions.map(s => `<button class="suggestion-chip" onclick="document.getElementById('gen-description').value = '${escapeHTML(s).replace(/'/g, "\\'")}'; this.parentElement.style.display='none';">${escapeHTML(s)}</button>`).join('')}
+      ${promptSuggestions.map((s, i) => `<button class="suggestion-chip" data-suggestion-idx="${i}" onclick="document.getElementById('gen-description').value = this.dataset.text; this.parentElement.style.display='none';" data-text="${escapeHTML(s)}">${escapeHTML(s)}</button>`).join('')}
     </div>` : ''}
     <textarea id="gen-description" class="gen-textarea" placeholder="e.g. A Postgres CRUD server for users and posts, with JWT auth, rate limiting, and structured logging..." rows="5"></textarea>
 

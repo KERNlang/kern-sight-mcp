@@ -70,6 +70,9 @@ export function activate(context: vscode.ExtensionContext): void {
       outputChannel.appendLine(`[MCP Server] Start failed: ${err.message}`);
     });
 
+    // Pre-detect AI engines in background so Generate mode doesn't flash "No AI"
+    void detectEngines().then((engines) => { detectedEngines = engines; });
+
     // Register sidebar
     sidebarProvider = new McpSecuritySidebarProvider(context);
     sidebarProvider.safeFixRules = ALL_AUTOFIX_RULES;
@@ -543,7 +546,7 @@ function updateStatusBar(state: 'idle' | 'analyzing' | 'done' | 'error' | 'kern'
       break;
     case 'kern':
       statusBarItem.text = '$(file-code) KERN Build';
-      statusBarItem.tooltip = 'KERN file — right-click to compile';
+      statusBarItem.tooltip = 'KERN file — compile from sidebar or Cmd+Shift+M';
       statusBarItem.backgroundColor = undefined;
       break;
     case 'building':
@@ -649,6 +652,7 @@ function showBuildModeForEditor(editor: vscode.TextEditor): void {
 }
 
 let detectedEngines: AIEngine[] = [];
+let _lastSelectedEngineId: string | undefined;
 
 async function showGenerateMode(): Promise<void> {
   // Show immediately with cached data (or empty) — no flash of "not MCP"
@@ -682,6 +686,7 @@ async function generateKernServer(description: string, selectedContextIds: strin
   updateStatusBar('building', 0);
 
   const engine = engineId || detectedEngines.find(e => e.available)?.id || 'api';
+  _lastSelectedEngineId = engine;
 
   try {
     const selectedContext = scannedContext.filter(c => selectedContextIds.includes(c.id));
@@ -824,7 +829,8 @@ async function importToKern(): Promise<void> {
   const lang = editor.document.languageId;
 
   if (!detectedEngines.length) detectedEngines = await detectEngines();
-  const engine = detectedEngines.find(e => e.available)?.id || 'api';
+  // Use the last selected engine from generate mode, or fall back to first available
+  const engine = _lastSelectedEngineId || detectedEngines.find(e => e.available)?.id || 'api';
 
   sidebarProvider.showGenerating();
   updateStatusBar('building', 0);
@@ -1120,6 +1126,8 @@ function scheduleKernValidation(document: vscode.TextDocument): void {
   }, REVIEW_DEBOUNCE_MS));
 }
 
+let _lastKernValidity: { file: string; valid: boolean; error?: string } | null = null;
+
 function validateKernDocument(document: vscode.TextDocument): void {
   const source = document.getText();
   const fileName = path.basename(document.uri.fsPath);
@@ -1128,7 +1136,11 @@ function validateKernDocument(document: vscode.TextDocument): void {
     parse(source);
     diagnosticCollection.set(document.uri, []);
     updateStatusBar('kern', 0);
-    sidebarProvider.showBuildMode(fileName, true);
+    // Only re-render sidebar if validity state actually changed
+    if (!_lastKernValidity || _lastKernValidity.file !== fileName || !_lastKernValidity.valid) {
+      _lastKernValidity = { file: fileName, valid: true };
+      sidebarProvider.showBuildMode(fileName, true);
+    }
   } catch (err) {
     if (err instanceof KernParseError) {
       const line = Math.max(0, err.line - 1);
@@ -1138,7 +1150,10 @@ function validateKernDocument(document: vscode.TextDocument): void {
         new vscode.Diagnostic(range, err.message, vscode.DiagnosticSeverity.Error),
       ]);
       updateStatusBar('error', 1);
-      sidebarProvider.showBuildMode(fileName, false, err.message);
+      if (!_lastKernValidity || _lastKernValidity.file !== fileName || _lastKernValidity.valid || _lastKernValidity.error !== err.message) {
+        _lastKernValidity = { file: fileName, valid: false, error: err.message };
+        sidebarProvider.showBuildMode(fileName, false, err.message);
+      }
       outputChannel.appendLine(`[Validate] ${fileName} — ${err.message}`);
     }
   }
@@ -1180,15 +1195,18 @@ async function compileKern(target: 'typescript' | 'python'): Promise<void> {
       : transpileMCP(ast, config);
 
     const lang = target === 'python' ? 'python' : 'typescript';
-    const compiledFileName = target === 'python'
-      ? fileName.replace(/\.kern$/, '-server.py')
-      : fileName.replace(/\.kern$/, '-server.ts');
+    const ext = target === 'python' ? '.py' : '.ts';
+    const compiledFileName = fileName.endsWith('.kern')
+      ? fileName.replace(/\.kern$/, `-server${ext}`)
+      : `${fileName}-server${ext}`;
 
-    // Show compiled output in side editor — track URI to prevent auto-review race
-    const doc = await vscode.workspace.openTextDocument({
-      content: result.code,
-      language: lang,
-    });
+    // Save compiled output to disk next to the source .kern file
+    const sourceDir = path.dirname(editor.document.uri.fsPath);
+    const outputPath = path.join(sourceDir, compiledFileName);
+    const outputUri = vscode.Uri.file(outputPath);
+    await vscode.workspace.fs.writeFile(outputUri, Buffer.from(result.code, 'utf-8'));
+
+    const doc = await vscode.workspace.openTextDocument(outputUri);
     trackCompiledUri(doc.uri.toString());
     await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside, true);
 
@@ -1219,6 +1237,7 @@ async function compileKern(target: 'typescript' | 'python'): Promise<void> {
     updateStatusBar('built', findings.length, score?.grade);
 
     // Update sidebar with build result + breadcrumb
+    // Use the URI string directly — _jumpToFile will match against visible editors
     const buildResult: import('./review-panel').McpReviewResult = {
       fileName: compiledFileName,
       filePath: doc.uri.toString(),
@@ -1249,10 +1268,16 @@ async function compileKern(target: 'typescript' | 'python'): Promise<void> {
       diagnosticCollection.set(editor.document.uri, [
         new vscode.Diagnostic(range, err.message, vscode.DiagnosticSeverity.Error),
       ]);
+
+      // #6: Recover sidebar from spinner to build mode with error
+      sidebarProvider.showBuildMode(fileName, false, err.message);
     } else {
       const msg = err instanceof Error ? err.message : String(err);
       outputChannel.appendLine(`[Build] Failed: ${msg}`);
       vscode.window.showErrorMessage(`Compile failed: ${msg}`);
+
+      // #6: Recover sidebar from spinner on any error
+      sidebarProvider.showBuildMode(fileName, true);
     }
   }
 }

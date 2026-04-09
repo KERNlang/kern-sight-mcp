@@ -11,6 +11,11 @@ export const PANEL_CSS = `
     --kern-orange: #f97316;
     --kern-red: #ef4444;
     --kern-green: #22c55e;
+    --kern-blue: #60a5fa;
+    --kern-yellow: #fbbf24;
+    --kern-surface: #1c2128;
+    --kern-muted: #525252;
+    --foreground: #ededed;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }

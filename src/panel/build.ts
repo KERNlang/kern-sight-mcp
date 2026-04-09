@@ -20,7 +20,7 @@ export function buildBuildModeHTML(fileName: string, syntaxValid: boolean, error
       <span class="build-status-icon">${statusIcon}</span>
       <span class="build-status-text">${statusText}</span>
     </div>
-    ${errorMessage ? `<div class="build-error">${escapeHTML(errorMessage)}</div>` : ''}
+    ${errorMessage ? `<div class="build-error">${escapeHTML(errorMessage)}</div><div style="color:var(--text-muted);font-size:10px;padding:0 16px;">Fix the syntax error above to enable compilation</div>` : ''}
 
     <div class="build-actions">
       <button class="build-btn" ${!syntaxValid ? 'disabled' : ''} onclick="vscode.postMessage({type:'compileMCP',target:'typescript'})">
@@ -33,12 +33,12 @@ export function buildBuildModeHTML(fileName: string, syntaxValid: boolean, error
 
     <div class="build-actions" style="margin-top:8px;">
       <button class="build-btn" style="background:var(--kern-surface);border:1px solid var(--border);" onclick="vscode.postMessage({type:'generateTests'})">
-        <span class="build-btn-icon">&#9881;</span> Generate Security Tests
+        <span class="build-btn-icon">&#9881;</span> Generate Test Scaffold
       </button>
     </div>
 
     <div class="build-hint">
-      <span style="color:var(--text-muted);font-size:10px;">Compiled output is auto-reviewed with 12 OWASP MCP rules</span>
+      <span style="color:var(--text-muted);font-size:10px;">Compiled output is auto-reviewed with OWASP MCP security rules</span>
     </div>
 
     <div class="footer"><span class="brand-kern-sm">KERN</span> <span class="brand-mcp-sm">MCP</span> · <a href="https://kernlang.dev" style="color:var(--text-muted);text-decoration:none;border-bottom:1px solid var(--border);">kernlang.dev</a></div>
@@ -103,6 +103,15 @@ export function buildBuildResultHTML(result: McpReviewResult, sourceFileName: st
     ${info.map((f, i) => buildFindingHTMLSimple(f, i + bugs.length + warnings.length, result)).join('')}
 
     ${configServers && configServers.length > 0 ? buildConfigGuardianSection(configServers) : ''}
+
+    <div class="build-actions" style="margin-top:16px;">
+      <button class="build-btn" style="background:var(--surface);border:1px solid var(--border);" onclick="vscode.postMessage({type:'compileMCP',target:'${result.lang === 'python' ? 'python' : 'typescript'}'})">
+        <span class="build-btn-icon">&#8634;</span> Recompile
+      </button>
+      <button class="build-btn" style="background:var(--surface);border:1px solid var(--border);" onclick="vscode.postMessage({type:'switchMode',mode:'build'})">
+        <span class="build-btn-icon">&#8592;</span> Back to BUILD
+      </button>
+    </div>
 
     <div class="footer"><span class="brand-kern-sm">KERN</span> <span class="brand-mcp-sm">MCP</span> · <a href="https://kernlang.dev" style="color:var(--text-muted);text-decoration:none;border-bottom:1px solid var(--border);">kernlang.dev</a></div>
   `, { animations, activeMode: 'build' });

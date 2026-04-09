@@ -156,7 +156,7 @@ async function generateWithCLI(
       break;
     case 'aider':
       log('[AI] Running aider...');
-      output = await spawnWithStdin('aider', ['--no-git', '--yes', '--message-file', '-'], fullPrompt, AI_CLI_TIMEOUT_MS);
+      output = await spawnWithStdin('aider', ['--no-git', '--yes', '--message', fullPrompt], '', AI_CLI_TIMEOUT_MS);
       break;
     case 'opencode':
       log('[AI] Running opencode...');
@@ -274,7 +274,8 @@ async function generateWithAPI(
 
   if (!resp.ok) {
     const errText = await resp.text();
-    throw new Error(`API error (${resp.status}): ${errText}`);
+    const truncated = errText.length > 200 ? errText.slice(0, 200) + '...' : errText;
+    throw new Error(`API error (${resp.status}): ${truncated}`);
   }
 
   const data = await resp.json();

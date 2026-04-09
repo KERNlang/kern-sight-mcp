@@ -94,7 +94,7 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
 
   showLoading(): void {
     if (!this._view) return;
-    if (this._current) return;
+    // Always show loading spinner — stale results from a different file should not persist
     const animations = vscode.workspace.getConfiguration('kernMcpSecurity').get<boolean>('animations', true);
     this._view.webview.html = buildLoadingHTML(animations);
   }
@@ -102,7 +102,10 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
   update(result: McpReviewResult, scoreDiff?: ScoreDiff | null): void {
     this._current = result;
     this._scoreDiff = scoreDiff ?? null;
-    this._mode = 'review';
+    // Don't override build mode — only switch to review if we're already in review
+    if (this._mode !== 'build') {
+      this._mode = 'review';
+    }
     this._render();
   }
 
@@ -187,7 +190,10 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
     this._jumping = true;
     setTimeout(() => { this._jumping = false; }, JUMP_DEBOUNCE_MS);
 
-    const uri = vscode.Uri.file(filePath);
+    // Handle both file paths and URI strings (untitled compiled buffers use URI strings)
+    const uri = filePath.startsWith('/') || /^[a-zA-Z]:/.test(filePath)
+      ? vscode.Uri.file(filePath)
+      : vscode.Uri.parse(filePath);
     const pos = new vscode.Position(Math.max(0, line - 1), Math.max(0, col - 1));
     const range = new vscode.Range(pos, pos);
     const existingEditor = vscode.window.visibleTextEditors.find((editor) => editor.document.uri.toString() === uri.toString());

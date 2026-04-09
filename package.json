@@ -124,7 +124,7 @@
       },
       {
         "command": "kernMcpSecurity.generateSecurityTests",
-        "title": "KERN: Generate Security Tests from .kern"
+        "title": "KERN: Generate Security Test Scaffold from .kern"
       }
     ],
     "keybindings": [
