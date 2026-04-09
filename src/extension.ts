@@ -9,7 +9,8 @@ import type { SecurityScore } from '@kernlang/review-mcp';
 import { ConfigGuardian } from './config-guardian';
 import { parse, resolveConfig, KernParseError } from '@kernlang/core';
 import { transpileMCP, transpileMCPPython } from '@kernlang/mcp';
-import { reviewMCPSource } from '@kernlang/review-mcp';
+import { reviewMCPSource, inspectMcpServers, generateLiveLockFile, verifyLiveLockFile } from '@kernlang/review-mcp';
+import type { InspectionResult, LiveLockFile } from '@kernlang/review-mcp';
 import { McpClient } from './mcp-client';
 import { detectEngines, generateWithEngine } from './ai-provider';
 import type { AIEngine } from './ai-provider';
@@ -184,6 +185,107 @@ export function activate(context: vscode.ExtensionContext): void {
     };
     void configGuardian.init(context);
     context.subscriptions.push(configGuardian);
+
+    // Live inspection + pin management handlers
+    sidebarProvider.onInspectServersRequested = async () => {
+      outputChannel.appendLine('[Inspector] Starting live server inspection...');
+      try {
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const result = await inspectMcpServers(workspaceRoot, { timeout: 10_000 });
+        const display = result.servers.map(s => ({
+          serverName: s.name,
+          status: s.status,
+          toolCount: s.tools.length,
+          findingCount: s.findings.length,
+          tools: s.tools.map(t => t.name),
+          findings: s.findings.map(f => ({ pattern: f.pattern, toolName: f.toolName, message: f.message, severity: f.severity })),
+        }));
+        sidebarProvider.updateInspection(display);
+        // Store result for pinning
+        context.workspaceState.update('kern.lastInspection', JSON.stringify(result));
+        outputChannel.appendLine(`[Inspector] Done — ${result.totalTools} tools, ${result.totalFindings} findings across ${result.servers.length} servers`);
+        if (result.totalFindings > 0) {
+          vscode.window.showWarningMessage(`MCP Inspector: ${result.totalFindings} poisoning finding(s) across ${result.servers.length} server(s)`);
+        } else {
+          vscode.window.showInformationMessage(`MCP Inspector: ${result.servers.length} server(s) inspected — no poisoning detected`);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        outputChannel.appendLine(`[Inspector] Failed: ${msg}`);
+        vscode.window.showErrorMessage(`MCP inspection failed: ${msg}`);
+      }
+    };
+
+    sidebarProvider.onPinToolsRequested = async () => {
+      outputChannel.appendLine('[Pin] Generating tool pin lockfile...');
+      try {
+        const cached = context.workspaceState.get<string>('kern.lastInspection');
+        let result: InspectionResult;
+        if (cached) {
+          result = JSON.parse(cached);
+        } else {
+          const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+          result = await inspectMcpServers(workspaceRoot, { timeout: 10_000 });
+        }
+        const lockFile = generateLiveLockFile(result);
+        context.workspaceState.update('kern.toolPinLockFile', JSON.stringify(lockFile));
+        sidebarProvider.updatePinStatus({ pinned: true, driftCount: 0, drifts: [] });
+        const toolCount = lockFile.servers.reduce((sum, s) => sum + s.tools.length, 0);
+        outputChannel.appendLine(`[Pin] Pinned ${toolCount} tools across ${lockFile.servers.length} servers`);
+        vscode.window.showInformationMessage(`Pinned ${toolCount} MCP tools — verify anytime to detect changes`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        outputChannel.appendLine(`[Pin] Failed: ${msg}`);
+        vscode.window.showErrorMessage(`Tool pinning failed: ${msg}`);
+      }
+    };
+
+    sidebarProvider.onVerifyPinsRequested = async () => {
+      outputChannel.appendLine('[Pin] Verifying tool pins...');
+      try {
+        const lockJson = context.workspaceState.get<string>('kern.toolPinLockFile');
+        if (!lockJson) {
+          vscode.window.showWarningMessage('No tool pins found — pin tools first');
+          return;
+        }
+        const lockFile: LiveLockFile = JSON.parse(lockJson);
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const result = await inspectMcpServers(workspaceRoot, { timeout: 10_000 });
+        const drifts = verifyLiveLockFile(lockFile, result);
+        sidebarProvider.updatePinStatus({
+          pinned: true,
+          driftCount: drifts.length,
+          drifts: drifts.map(d => ({ serverName: d.serverName, toolName: d.toolName, field: d.field, message: d.message, severity: d.severity })),
+        });
+        // Also update inspection display
+        const display = result.servers.map(s => ({
+          serverName: s.name,
+          status: s.status,
+          toolCount: s.tools.length,
+          findingCount: s.findings.length,
+          tools: s.tools.map(t => t.name),
+          findings: s.findings.map(f => ({ pattern: f.pattern, toolName: f.toolName, message: f.message, severity: f.severity })),
+        }));
+        sidebarProvider.updateInspection(display);
+        if (drifts.length === 0) {
+          outputChannel.appendLine('[Pin] All pins verified — no drift');
+          vscode.window.showInformationMessage('All MCP tool pins verified — no changes detected');
+        } else {
+          outputChannel.appendLine(`[Pin] ${drifts.length} drift(s) detected`);
+          vscode.window.showWarningMessage(`Tool pin verification: ${drifts.length} drift(s) detected — possible rug pull`);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        outputChannel.appendLine(`[Pin] Verify failed: ${msg}`);
+        vscode.window.showErrorMessage(`Pin verification failed: ${msg}`);
+      }
+    };
+
+    // Restore pin status on activation
+    const existingLock = context.workspaceState.get<string>('kern.toolPinLockFile');
+    if (existingLock) {
+      sidebarProvider.updatePinStatus({ pinned: true, driftCount: 0, drifts: [] });
+    }
 
     // Code actions (quick fixes)
     const codeActionProvider = new McpSecurityCodeActionProvider();

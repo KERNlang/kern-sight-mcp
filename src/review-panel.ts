@@ -13,6 +13,7 @@ import { buildBuildModeHTML, buildCompilingHTML, buildBuildResultHTML } from './
 import { buildGenerateHTML, buildGeneratingHTML, buildImportModeHTML, buildGenerateErrorHTML } from './panel/generate';
 import { buildLoadingHTML, buildNotMcpHTML } from './panel/shell';
 import type { McpReviewResult } from './panel/shared';
+import type { InspectionDisplay, PinStatus } from './panel/guardian';
 
 export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'kernMcpSecurity.sidebar';
@@ -21,6 +22,8 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
   private _scoreDiff: ScoreDiff | null = null;
   private _jumping = false;
   private _configServers: McpServerEntry[] = [];
+  private _inspection: InspectionDisplay[] = [];
+  private _pinStatus: PinStatus = { pinned: false, driftCount: 0, drifts: [] };
   private _scannedFiles: { name: string; path: string; count: number; grade?: string }[] = [];
   private _mode: 'review' | 'build' = 'review';
   public safeFixRules: Set<string> = new Set();
@@ -36,6 +39,9 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
   public onModeChanged?: (mode: 'review' | 'build') => void;
   public onImportToKernRequested?: () => void;
   public onConvertTargetRequested?: () => void;
+  public onInspectServersRequested?: () => void;
+  public onPinToolsRequested?: () => void;
+  public onVerifyPinsRequested?: () => void;
 
   constructor(private readonly _context: vscode.ExtensionContext) {}
 
@@ -85,6 +91,12 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
         vscode.commands.executeCommand('kernMcpSecurity.generateBadge');
       } else if (msg.type === 'openSettings') {
         void vscode.commands.executeCommand('workbench.action.openSettings', 'kernMcpSecurity.ai');
+      } else if (msg.type === 'inspectServers') {
+        this.onInspectServersRequested?.();
+      } else if (msg.type === 'pinTools') {
+        this.onPinToolsRequested?.();
+      } else if (msg.type === 'verifyPins') {
+        this.onVerifyPinsRequested?.();
       } else if (msg.type === 'switchMode') {
         this._mode = msg.mode;
         this.onModeChanged?.(msg.mode);
@@ -168,21 +180,29 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
 
   updateConfigGuardian(servers: McpServerEntry[]): void {
     this._configServers = servers;
-    // Don't re-render if we're in build mode — config updates shouldn't reset the BUILD screen
     if (this._mode !== 'build') {
       this._render();
     }
   }
 
+  updateInspection(inspection: InspectionDisplay[]): void {
+    this._inspection = inspection;
+    this._render();
+  }
+
+  updatePinStatus(pinStatus: PinStatus): void {
+    this._pinStatus = pinStatus;
+    this._render();
+  }
+
   private _render(): void {
     if (!this._view) return;
-    // Only render review mode content — build mode has its own explicit render calls
     if (this._mode === 'build') return;
     const animations = vscode.workspace.getConfiguration('kernMcpSecurity').get<boolean>('animations', true);
     if (this._current) {
-      this._view.webview.html = buildReviewHTML(this._current, this.safeFixRules, this._configServers, animations, this._scoreDiff, this._scannedFiles);
+      this._view.webview.html = buildReviewHTML(this._current, this.safeFixRules, this._configServers, animations, this._scoreDiff, this._scannedFiles, this._inspection, this._pinStatus);
     } else {
-      this._view.webview.html = buildNotMcpHTML(this._configServers, animations);
+      this._view.webview.html = buildNotMcpHTML(this._configServers, animations, this._inspection, this._pinStatus);
     }
   }
 

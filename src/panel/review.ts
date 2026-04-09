@@ -6,11 +6,12 @@ import type { McpServerEntry } from '../config-guardian';
 import { buildPermissionManifest } from '../permission-manifest';
 import { buildShell } from './shell';
 import { buildConfigGuardianSection } from './guardian';
+import type { InspectionDisplay, PinStatus } from './guardian';
 import { buildAbusePathSection } from './abuse-path';
 
 export interface ScannedFile { name: string; path: string; count: number; grade?: string; }
 
-export function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<string>, configServers?: McpServerEntry[], animations = true, scoreDiff?: ScoreDiff | null, scannedFiles?: ScannedFile[]): string {
+export function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<string>, configServers?: McpServerEntry[], animations = true, scoreDiff?: ScoreDiff | null, scannedFiles?: ScannedFile[], inspection?: InspectionDisplay[], pinStatus?: PinStatus): string {
   const { fileName, findings, irNodes, lang } = result;
   const bugs = findings.filter((f) => f.severity === 'error');
   const warnings = findings.filter((f) => f.severity === 'warning');
@@ -59,7 +60,7 @@ export function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<stri
     ${info.length > 0 ? '<div class="section-label" data-severity-section="info">Notes</div>' : ''}
     ${info.map((f, i) => buildFindingHTML(f, i + bugs.length + warnings.length, result)).join('')}
 
-    ${configServers && configServers.length > 0 ? buildConfigGuardianSection(configServers) : ''}
+    ${configServers && configServers.length > 0 ? buildConfigGuardianSection(configServers, inspection, pinStatus) : ''}
 
     ${result.score ? `
     <div class="build-actions" style="margin-top:16px;">

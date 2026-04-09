@@ -131,13 +131,13 @@ export function buildLoadingHTML(animations = true): string {
   `, { animations });
 }
 
-export function buildNotMcpHTML(configServers?: McpServerEntry[], animations = true): string {
+export function buildNotMcpHTML(configServers?: McpServerEntry[], animations = true, inspection?: import('./guardian').InspectionDisplay[], pinStatus?: import('./guardian').PinStatus): string {
   return buildShell(`
     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 16px;text-align:center;gap:16px;">
       <div class="header-brand"><span class="kern">KE<span class="kern-underline"></span>RN</span> <span class="mcp">MCP</span></div>
       <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;max-width:260px;">This file is not an MCP server.<br><br>Open a file that imports<br><code style="font-size:11px;color:var(--kern-orange);background:rgba(249,115,22,0.1);padding:2px 6px;border-radius:3px;">@modelcontextprotocol/sdk</code><br>or<br><code style="font-size:11px;color:var(--kern-orange);background:rgba(249,115,22,0.1);padding:2px 6px;border-radius:3px;">mcp.server</code></p>
       <a class="create-kern-link" onclick="vscode.postMessage({type:'createKern'})">or generate a .kern server with AI &rarr;</a>
     </div>
-    ${configServers && configServers.length > 0 ? buildConfigGuardianSection(configServers) : ''}
+    ${configServers && configServers.length > 0 ? buildConfigGuardianSection(configServers, inspection, pinStatus) : ''}
   `, { animations });
 }

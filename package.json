@@ -2,7 +2,7 @@
   "name": "kern-mcp-security",
   "displayName": "KERN MCP — Build, Review & Secure MCP Servers",
   "description": "Write .kern, compile to secure MCP servers (TypeScript + Python), auto-review with 13 OWASP MCP rules. Inline diagnostics, security scoring, quick fixes. Command injection, path traversal, missing auth, secrets exposure, prompt injection detection. Build + scan in one tool.",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "publisher": "KERNlang",
   "license": "AGPL-3.0-or-later",
   "private": false,
