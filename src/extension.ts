@@ -1303,12 +1303,18 @@ async function compileKern(target: 'typescript' | 'python'): Promise<void> {
       : `${fileName}-server${ext}`;
 
     // Save compiled output to disk next to the source .kern file
-    const sourceDir = path.dirname(editor.document.uri.fsPath);
-    const outputPath = path.join(sourceDir, compiledFileName);
-    const outputUri = vscode.Uri.file(outputPath);
-    await vscode.workspace.fs.writeFile(outputUri, Buffer.from(result.code, 'utf-8'));
-
-    const doc = await vscode.workspace.openTextDocument(outputUri);
+    // For untitled buffers (from AI generate/import), fall back to unsaved document
+    const isUntitled = editor.document.isUntitled;
+    let doc: vscode.TextDocument;
+    if (isUntitled) {
+      doc = await vscode.workspace.openTextDocument({ content: result.code, language: lang });
+    } else {
+      const sourceDir = path.dirname(editor.document.uri.fsPath);
+      const outputPath = path.join(sourceDir, compiledFileName);
+      const outputUri = vscode.Uri.file(outputPath);
+      await vscode.workspace.fs.writeFile(outputUri, Buffer.from(result.code, 'utf-8'));
+      doc = await vscode.workspace.openTextDocument(outputUri);
+    }
     trackCompiledUri(doc.uri.toString());
     await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside, true);
 
@@ -1349,6 +1355,9 @@ async function compileKern(target: 'typescript' | 'python'): Promise<void> {
       score,
     };
     sidebarProvider.showBuildResult(buildResult, fileName);
+
+    // Allow subsequent edits to the compiled file to trigger normal rescan
+    compiledUris.delete(doc.uri.toString());
 
     if (findings.length === 0) {
       vscode.window.showInformationMessage(`${fileName} compiled — no security findings`);

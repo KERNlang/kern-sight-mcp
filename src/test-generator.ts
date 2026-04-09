@@ -71,7 +71,11 @@ export function generateTestSuites(ast: KernNode): ToolTestSuite[] {
     for (const p of params) {
       const name = str(p.props?.name) || 'input';
       const type = str(p.props?.type) || 'string';
-      const defaultVal = str(p.props?.default);
+      const rawDefault = p.props?.default;
+      // Preserve numeric/boolean types instead of coercing everything to string
+      const defaultVal = rawDefault !== undefined && rawDefault !== null
+        ? (type === 'number' ? Number(rawDefault) : type === 'boolean' ? rawDefault === true || rawDefault === 'true' : String(rawDefault))
+        : undefined;
       validInput[name] = defaultVal ?? (type === 'number' ? 1 : type === 'boolean' ? true : 'test-value');
     }
 
