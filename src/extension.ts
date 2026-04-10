@@ -893,10 +893,11 @@ mcp name=ServerName version=1.0
 - \`sanitize\` — strip dangerous characters from string params
 - \`pathContainment\` — enforce file paths stay within allowlist directories
 - \`validate\` — min/max/regex bounds on params
-- \`auth\` — bootstrap check: verifies env var exists (add real token verification for production)
-- \`rateLimit\` — limit calls per time window
-- \`sizeLimit\` — cap input size in bytes
+- \`auth\` — verifies caller via MCP session authInfo, falls back to env var check
+- \`rateLimit\` — per-client rate limiting via MCP session context
+- \`sizeLimit\` — cap input size in bytes (strings + JSON objects)
 - \`sanitizeOutput\` — strip prompt-injection patterns from responses
+- \`urlValidation\` — validate URL scheme/host to prevent SSRF
 
 ## .kern Rules
 - Indent: 2 spaces (strict)
@@ -980,11 +981,12 @@ async function importToKern(): Promise<void> {
           continue;
         }
 
-        const guardKinds = new Set(guards.map(g => (g.props?.type as string) || ''));
-        const hasPathContainment = guardKinds.has('pathContainment');
+        const guardKinds = new Set(guards.map(g => (g.props?.type as string) || (g.props?.kind as string) || ''));
+        const hasPathContainment = guardKinds.has('pathContainment') || guardKinds.has('path-containment');
         const hasSanitizeOutput = guardKinds.has('sanitizeOutput');
+        const hasUrlValidation = guardKinds.has('urlValidation');
 
-        const hasSanitize = guardKinds.has('sanitize');
+        const hasSanitize = guardKinds.has('sanitize') || guardKinds.has('validation');
 
         // Detect file I/O without pathContainment
         if (!hasPathContainment && /\b(readFile|readFileSync|writeFile|writeFileSync|readdir|readdirSync|unlink|unlinkSync|createReadStream|createWriteStream)\b/.test(handlerCode)) {
@@ -1004,6 +1006,11 @@ async function importToKern(): Promise<void> {
         // Detect external data returned without sanitizeOutput
         if (!hasSanitizeOutput && /\b(fetch|http\.request|axios|got\.get|got\.post|got\.put)\b/.test(handlerCode)) {
           warnings.push(`${name}: returns external data without sanitizeOutput guard`);
+        }
+
+        // Detect network calls with user-controlled URLs without urlValidation
+        if (!hasUrlValidation && !hasSanitize && /\bfetch\s*\(\s*(?:params|args|input)\b/.test(handlerCode)) {
+          warnings.push(`${name}: user-controlled URL in fetch() without urlValidation guard`);
         }
       }
 

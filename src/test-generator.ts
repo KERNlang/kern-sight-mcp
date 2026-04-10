@@ -45,6 +45,11 @@ const MALICIOUS_PAYLOADS: Record<string, { value: unknown; label: string }[]> = 
   rateLimit: [],
   auth: [],
   sanitizeOutput: [],
+  urlValidation: [
+    { value: 'file:///etc/passwd', label: 'file:// scheme (SSRF)' },
+    { value: 'javascript:alert(1)', label: 'javascript: scheme' },
+    { value: 'ftp://attacker.com/malware', label: 'ftp:// scheme' },
+  ],
 };
 
 function getChildren(node: KernNode, type: string): KernNode[] {

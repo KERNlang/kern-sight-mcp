@@ -10,12 +10,12 @@ export interface AbusePath {
 }
 
 const EFFECT_GUARD_MAP: Record<string, string[]> = {
-  'fs': ['pathContainment'],
-  'file-read': ['pathContainment'],
-  'file-write': ['pathContainment'],
-  'shell-exec': ['sanitize'],
-  'network': ['sanitizeOutput'],
-  'db': ['sanitize'],
+  'fs': ['pathContainment', 'path-containment'],
+  'file-read': ['pathContainment', 'path-containment'],
+  'file-write': ['pathContainment', 'path-containment'],
+  'shell-exec': ['sanitize', 'validation'],
+  'network': ['sanitizeOutput', 'validation', 'rate-limit'],
+  'db': ['sanitize', 'validation'],
 };
 
 const SEVERITY_MAP: Record<string, 'critical' | 'high' | 'medium'> = {
