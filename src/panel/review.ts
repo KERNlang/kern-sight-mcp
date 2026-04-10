@@ -63,10 +63,8 @@ export function buildReviewHTML(result: McpReviewResult, safeFixRules?: Set<stri
     ${configServers && configServers.length > 0 ? buildConfigGuardianSection(configServers, inspection, pinStatus) : ''}
 
     ${result.score ? `
-    <div class="build-actions" style="margin-top:16px;">
-      <button class="build-btn" style="background:var(--kern-surface);border:1px solid var(--border);font-size:10px;" onclick="vscode.postMessage({type:'generateBadge'})">
-        <span class="build-btn-icon">&#9733;</span> Generate README Badge
-      </button>
+    <div style="margin-top:12px;text-align:center;">
+      <a style="font-size:9px;color:var(--text-muted);cursor:pointer;text-decoration:underline;" onclick="vscode.postMessage({type:'generateBadge'})">Generate score badge for README</a>
     </div>` : ''}
 
     ${scannedFiles && scannedFiles.length > 1 ? buildScannedFilesSection(scannedFiles, result.filePath) : ''}

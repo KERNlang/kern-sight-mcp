@@ -78,13 +78,13 @@ export function buildConfigGuardianSection(servers: McpServerEntry[], inspection
   let pinHtml = '';
   if (pinStatus) {
     if (pinStatus.pinned && pinStatus.driftCount === 0) {
-      pinHtml = '<div class="guardian-clean" style="margin-top:8px;">&#128274; Tools pinned — no drift detected</div>';
+      pinHtml = '<div class="guardian-pin-ok" style="margin-top:8px;font-size:10px;color:var(--kern-green);">&#9632; Pinned — no drift</div>';
     } else if (pinStatus.pinned && pinStatus.driftCount > 0) {
       const driftItems = pinStatus.drifts.map(d => {
         const sevClass = d.severity === 'error' ? 'bug' : 'warn';
-        return `<div class="guardian-issue ${sevClass}"><span class="guardian-issue-icon">&#9888;</span>${escapeHTML(d.serverName)}/${escapeHTML(d.toolName)}: ${escapeHTML(d.message)}</div>`;
+        return `<div class="guardian-issue ${sevClass}"><span class="guardian-issue-icon">&#9650;</span>${escapeHTML(d.serverName)}/${escapeHTML(d.toolName)}: ${escapeHTML(d.message)}</div>`;
       }).join('');
-      pinHtml = `<div style="margin-top:8px;"><div class="guardian-issue bug"><span class="guardian-issue-icon">&#9888;</span>${pinStatus.driftCount} tool drift(s) detected — possible rug pull</div>${driftItems}</div>`;
+      pinHtml = `<div style="margin-top:8px;"><div class="guardian-issue bug"><span class="guardian-issue-icon">&#9650;</span>${pinStatus.driftCount} drift(s) — tools changed since pinned</div>${driftItems}</div>`;
     }
   }
 
@@ -99,11 +99,12 @@ export function buildConfigGuardianSection(servers: McpServerEntry[], inspection
     <div class="guardian-list">${serverCards}</div>
     ${pinHtml}
     <div class="guardian-actions" style="display:flex;gap:6px;margin-top:10px;">
-      <button class="build-btn" style="flex:1;font-size:10px;padding:4px 8px;background:var(--kern-surface);border:1px solid var(--border);" onclick="vscode.postMessage({type:'inspectServers'})">
-        &#128269; Inspect
+      <button class="build-btn guardian-action-btn" id="inspect-btn" style="flex:1;font-size:10px;padding:5px 8px;background:var(--kern-surface);border:1px solid var(--border);" onclick="this.innerHTML='&#9676; Scanning...';this.disabled=true;vscode.postMessage({type:'inspectServers'})">
+        &#9655; Inspect Servers
       </button>
-      <button class="build-btn" style="flex:1;font-size:10px;padding:4px 8px;background:var(--kern-surface);border:1px solid var(--border);" onclick="vscode.postMessage({type:'${pinStatus?.pinned ? 'verifyPins' : 'pinTools'}'})">
-        ${pinStatus?.pinned ? '&#128274; Verify Pins' : '&#128204; Pin Tools'}
+      <button class="build-btn guardian-action-btn" id="pin-btn" style="flex:1;font-size:10px;padding:5px 8px;background:var(--kern-surface);border:1px solid var(--border);" onclick="this.innerHTML='&#9676; ${pinStatus?.pinned ? 'Verifying' : 'Pinning'}...';this.disabled=true;vscode.postMessage({type:'${pinStatus?.pinned ? 'verifyPins' : 'pinTools'}'})">
+        ${pinStatus?.pinned ? '&#9632; Verify Pins' : '&#9654; Pin Tools'}
       </button>
-    </div>`;
+    </div>
+    <div class="guardian-hint" style="font-size:9px;color:var(--text-muted);margin-top:4px;line-height:1.4;">Inspect connects to your servers and checks for poisoning. Pin saves a snapshot to detect future changes.</div>`;
 }

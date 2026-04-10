@@ -114,10 +114,8 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
   update(result: McpReviewResult, scoreDiff?: ScoreDiff | null): void {
     this._current = result;
     this._scoreDiff = scoreDiff ?? null;
-    // Don't override build mode — only switch to review if we're already in review
-    if (this._mode !== 'build') {
-      this._mode = 'review';
-    }
+    // If update() is called, we're reviewing a file — always switch to review mode
+    this._mode = 'review';
     this._render();
   }
 
