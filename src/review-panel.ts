@@ -26,6 +26,8 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
   private _pinStatus: PinStatus = { pinned: false, driftCount: 0, drifts: [] };
   private _scannedFiles: { name: string; path: string; count: number; grade?: string }[] = [];
   private _mode: 'review' | 'build' = 'review';
+  private _busy = false;
+  private _busyLabel = '';
   public safeFixRules: Set<string> = new Set();
   public onScanRequested?: () => void;
   public onCopySuggestionRequested?: (suggestion: string) => void;
@@ -104,22 +106,39 @@ export class McpSecuritySidebarProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  /** Lock the sidebar during async operations (compile, generate, inspect). */
+  setBusy(label: string): void {
+    this._busy = true;
+    this._busyLabel = label;
+  }
+
+  /** Release the sidebar lock — allows editor-change-driven updates again. */
+  clearBusy(): void {
+    this._busy = false;
+    this._busyLabel = '';
+  }
+
+  get isBusy(): boolean {
+    return this._busy;
+  }
+
   showLoading(): void {
     if (!this._view) return;
-    // Always show loading spinner — stale results from a different file should not persist
+    if (this._busy) return; // Don't override an active operation
     const animations = vscode.workspace.getConfiguration('kernMcpSecurity').get<boolean>('animations', true);
     this._view.webview.html = buildLoadingHTML(animations);
   }
 
   update(result: McpReviewResult, scoreDiff?: ScoreDiff | null): void {
+    if (this._busy) return; // Don't switch away from active operation
     this._current = result;
     this._scoreDiff = scoreDiff ?? null;
-    // If update() is called, we're reviewing a file — always switch to review mode
     this._mode = 'review';
     this._render();
   }
 
   showNotMcp(): void {
+    if (this._busy) return; // Don't switch away from active operation
     this._current = null;
     this._mode = 'review';
     if (!this._view) return;

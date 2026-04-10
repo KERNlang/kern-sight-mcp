@@ -188,6 +188,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // Live inspection + pin management handlers
     sidebarProvider.onInspectServersRequested = async () => {
+      sidebarProvider.setBusy('Inspecting MCP servers');
       outputChannel.appendLine('[Inspector] Starting live server inspection...');
       try {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -209,7 +210,9 @@ export function activate(context: vscode.ExtensionContext): void {
         } else {
           vscode.window.showInformationMessage(`MCP Inspector: ${result.servers.length} server(s) inspected — no poisoning detected`);
         }
+        sidebarProvider.clearBusy();
       } catch (err) {
+        sidebarProvider.clearBusy();
         const msg = err instanceof Error ? err.message : String(err);
         outputChannel.appendLine(`[Inspector] Failed: ${msg}`);
         vscode.window.showErrorMessage(`MCP inspection failed: ${msg}`);
@@ -217,6 +220,7 @@ export function activate(context: vscode.ExtensionContext): void {
     };
 
     sidebarProvider.onPinToolsRequested = async () => {
+      sidebarProvider.setBusy('Pinning MCP tools');
       outputChannel.appendLine('[Pin] Generating tool pin lockfile...');
       try {
         const cached = context.workspaceState.get<string>('kern.lastInspection');
@@ -233,7 +237,9 @@ export function activate(context: vscode.ExtensionContext): void {
         const toolCount = lockFile.servers.reduce((sum, s) => sum + s.tools.length, 0);
         outputChannel.appendLine(`[Pin] Pinned ${toolCount} tools across ${lockFile.servers.length} servers`);
         vscode.window.showInformationMessage(`Pinned ${toolCount} MCP tools — verify anytime to detect changes`);
+        sidebarProvider.clearBusy();
       } catch (err) {
+        sidebarProvider.clearBusy();
         const msg = err instanceof Error ? err.message : String(err);
         outputChannel.appendLine(`[Pin] Failed: ${msg}`);
         vscode.window.showErrorMessage(`Tool pinning failed: ${msg}`);
@@ -241,6 +247,7 @@ export function activate(context: vscode.ExtensionContext): void {
     };
 
     sidebarProvider.onVerifyPinsRequested = async () => {
+      sidebarProvider.setBusy('Verifying tool pins');
       outputChannel.appendLine('[Pin] Verifying tool pins...');
       try {
         const lockJson = context.workspaceState.get<string>('kern.toolPinLockFile');
@@ -274,7 +281,9 @@ export function activate(context: vscode.ExtensionContext): void {
           outputChannel.appendLine(`[Pin] ${drifts.length} drift(s) detected`);
           vscode.window.showWarningMessage(`Tool pin verification: ${drifts.length} drift(s) detected — possible rug pull`);
         }
+        sidebarProvider.clearBusy();
       } catch (err) {
+        sidebarProvider.clearBusy();
         const msg = err instanceof Error ? err.message : String(err);
         outputChannel.appendLine(`[Pin] Verify failed: ${msg}`);
         vscode.window.showErrorMessage(`Pin verification failed: ${msg}`);
@@ -784,6 +793,7 @@ async function generateKernServer(description: string, selectedContextIds: strin
     return;
   }
 
+  sidebarProvider.setBusy('Generating MCP server');
   sidebarProvider.showGenerating();
   updateStatusBar('building', 0);
 
@@ -818,6 +828,7 @@ ${KERN_MCP_SYNTAX}`;
     await vscode.window.showTextDocument(doc);
 
     updateStatusBar('kern', 0);
+    sidebarProvider.clearBusy();
     outputChannel.appendLine(`[AI] Generated .kern server (${cleaned.split('\n').length} lines)`);
 
     // Show build mode for the generated file
@@ -839,6 +850,7 @@ ${KERN_MCP_SYNTAX}`;
     const msg = err instanceof Error ? err.message : String(err);
     outputChannel.appendLine(`[AI] Generation failed: ${msg}`);
     const engineLabel = detectedEngines.find(e => e.id === engine)?.label ?? engine;
+    sidebarProvider.clearBusy();
     sidebarProvider.showGenerateError(msg, engineLabel);
   }
 }
@@ -934,6 +946,7 @@ async function importToKern(): Promise<void> {
   // Use the last selected engine from generate mode, or fall back to first available
   const engine = _lastSelectedEngineId || detectedEngines.find(e => e.available)?.id || 'api';
 
+  sidebarProvider.setBusy('Generating MCP server');
   sidebarProvider.showGenerating();
   updateStatusBar('building', 0);
 
@@ -947,6 +960,7 @@ async function importToKern(): Promise<void> {
     await vscode.window.showTextDocument(doc);
 
     updateStatusBar('kern', 0);
+    sidebarProvider.clearBusy();
     outputChannel.appendLine(`[Import] ${fileName} → .kern (${cleaned.split('\n').length} lines)`);
 
     try {
@@ -1008,6 +1022,7 @@ async function importToKern(): Promise<void> {
     const msg = err instanceof Error ? err.message : String(err);
     outputChannel.appendLine(`[Import] Failed: ${msg}`);
     const engineLabel = detectedEngines.find(e => e.id === engine)?.label ?? engine;
+    sidebarProvider.clearBusy();
     sidebarProvider.showGenerateError(msg, engineLabel);
   }
 }
@@ -1043,6 +1058,7 @@ async function convertMCPTarget(): Promise<void> {
   if (!detectedEngines.length) detectedEngines = await detectEngines();
   const engine = detectedEngines.find(e => e.available)?.id || 'api';
 
+  sidebarProvider.setBusy('Generating MCP server');
   sidebarProvider.showGenerating();
   updateStatusBar('building', 0);
 
@@ -1127,6 +1143,7 @@ async function convertMCPTarget(): Promise<void> {
       score,
     };
     sidebarProvider.showBuildResult(buildResult, fileName);
+    sidebarProvider.clearBusy();
 
     if (findings.length === 0) {
       vscode.window.showInformationMessage(`${fileName} converted via .kern → ${targetLabel} — no security findings`);
@@ -1144,7 +1161,8 @@ async function convertMCPTarget(): Promise<void> {
     } else {
       outputChannel.appendLine(`[Convert] Failed: ${msg}`);
       const engineLabel = detectedEngines.find(e => e.id === engine)?.label ?? engine;
-      sidebarProvider.showGenerateError(msg, engineLabel);
+      sidebarProvider.clearBusy();
+    sidebarProvider.showGenerateError(msg, engineLabel);
     }
   }
 }
@@ -1274,6 +1292,7 @@ async function compileKern(target: 'typescript' | 'python'): Promise<void> {
   const fileName = path.basename(editor.document.fileName);
 
   updateStatusBar('building', 0);
+  sidebarProvider.setBusy(`Compiling ${fileName}`);
   sidebarProvider.showCompiling(fileName, target === 'python' ? 'Python' : 'TypeScript');
 
   try {
@@ -1355,6 +1374,7 @@ async function compileKern(target: 'typescript' | 'python'): Promise<void> {
       score,
     };
     sidebarProvider.showBuildResult(buildResult, fileName);
+    sidebarProvider.clearBusy();
 
     // Allow subsequent edits to the compiled file to trigger normal rescan
     compiledUris.delete(doc.uri.toString());
@@ -1381,6 +1401,7 @@ async function compileKern(target: 'typescript' | 'python'): Promise<void> {
       ]);
 
       // #6: Recover sidebar from spinner to build mode with error
+      sidebarProvider.clearBusy();
       sidebarProvider.showBuildMode(fileName, false, err.message);
     } else {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1388,6 +1409,7 @@ async function compileKern(target: 'typescript' | 'python'): Promise<void> {
       vscode.window.showErrorMessage(`Compile failed: ${msg}`);
 
       // #6: Recover sidebar from spinner on any error
+      sidebarProvider.clearBusy();
       sidebarProvider.showBuildMode(fileName, true);
     }
   }
