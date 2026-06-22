@@ -1,0 +1,9 @@
+mcp name=MyServer version=1.0
+
+  tool name=hello
+    description text="Say hello"
+    param name=name type=string required=true
+    guard type=sanitize param=name
+    handler <<<
+      return { content: [{ type: "text", text: `Hello, ${args.name}!` }] };
+    >>>

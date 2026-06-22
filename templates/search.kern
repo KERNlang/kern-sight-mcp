@@ -1,0 +1,31 @@
+mcp name=SearchService version=1.0
+
+  tool name=search
+    description text="Search for items by query"
+    param name=query type=string required=true
+    param name=limit type=number default=10
+    param name=page type=number default=1
+    guard type=sanitize param=query
+    guard type=validate param=limit min=1 max=100
+    guard type=validate param=page min=1
+    guard type=rateLimit window=60000 requests=100
+    guard type=sanitizeOutput
+    handler <<<
+      const offset = (args.page - 1) * args.limit;
+      const results = await db.query(
+        `SELECT * FROM items WHERE content ILIKE $1 LIMIT $2 OFFSET $3`,
+        [`%${args.query}%`, args.limit, offset]
+      );
+      return { content: [{ type: "text", text: JSON.stringify({ results, page: args.page, limit: args.limit }) }] };
+    >>>
+
+  tool name=get_item
+    description text="Get a single item by ID"
+    param name=id type=string required=true
+    guard type=sanitize param=id
+    guard type=rateLimit window=60000 requests=100
+    guard type=sanitizeOutput
+    handler <<<
+      const item = await db.query(`SELECT * FROM items WHERE id = $1`, [args.id]);
+      return { content: [{ type: "text", text: JSON.stringify(item[0] ?? null) }] };
+    >>>

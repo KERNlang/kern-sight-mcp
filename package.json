@@ -2,7 +2,7 @@
   "name": "kern-mcp-security",
   "displayName": "KERN MCP — Build, Review & Secure MCP Servers",
   "description": "Write .kern, compile to secure MCP servers (TypeScript + Python), auto-review with 13 OWASP MCP rules. Inline diagnostics, security scoring, quick fixes. Command injection, path traversal, missing auth, secrets exposure, prompt injection detection. Build + scan in one tool.",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "publisher": "KERNlang",
   "license": "AGPL-3.0-or-later",
   "private": false,
@@ -108,15 +108,23 @@
       },
       {
         "command": "kernMcpSecurity.generateMCP",
-        "title": "KERN: Generate MCP Server with AI"
+        "title": "KERN: Generate MCP Server with AI (Beta)"
       },
       {
         "command": "kernMcpSecurity.importToKern",
-        "title": "KERN: Import MCP Server to .kern"
+        "title": "KERN: Import MCP Server to .kern (Beta)"
       },
       {
         "command": "kernMcpSecurity.convertTarget",
-        "title": "KERN: Convert MCP Server (TS ↔ Python)"
+        "title": "KERN: Convert MCP Server (TS ↔ Python) (Beta)"
+      },
+      {
+        "command": "kernMcpSecurity.newKernFromTemplate",
+        "title": "KERN: New .kern from Template"
+      },
+      {
+        "command": "kernMcpSecurity.generateSecurityTests",
+        "title": "KERN: Generate Security Test Scaffold from .kern"
       }
     ],
     "keybindings": [
@@ -130,8 +138,13 @@
     "languages": [
       {
         "id": "kern",
-        "extensions": [".kern"],
-        "aliases": ["KERN", "kern"],
+        "extensions": [
+          ".kern"
+        ],
+        "aliases": [
+          "KERN",
+          "kern"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -192,6 +205,16 @@
           "command": "kernMcpSecurity.convertTarget",
           "group": "kern@5",
           "when": "resourceLangId == typescript || resourceLangId == javascript || resourceLangId == python"
+        },
+        {
+          "command": "kernMcpSecurity.generateSecurityTests",
+          "group": "kern@4",
+          "when": "resourceLangId == kern"
+        },
+        {
+          "command": "kernMcpSecurity.newKernFromTemplate",
+          "group": "kern@5",
+          "when": "resourceLangId == kern"
         }
       ]
     },
@@ -221,14 +244,19 @@
         "kernMcpSecurity.ai.provider": {
           "type": "string",
           "default": "openai",
-          "enum": ["openai", "anthropic", "gemini", "custom"],
+          "enum": [
+            "openai",
+            "anthropic",
+            "gemini",
+            "custom"
+          ],
           "enumDescriptions": [
             "OpenAI (GPT-4o, GPT-4, etc.) — also works with DeepSeek, Qwen, Mistral, Ollama, LM Studio",
             "Anthropic (Claude Opus, Sonnet, Haiku)",
             "Google (Gemini Pro, Flash)",
             "Custom OpenAI-compatible endpoint"
           ],
-          "description": "LLM provider for AI-powered .kern generation"
+          "description": "LLM provider for AI-assisted authoring (Generate, Import, Convert)"
         },
         "kernMcpSecurity.ai.apiKey": {
           "type": "string",
@@ -253,7 +281,7 @@
     "watch": "node build.mjs --watch",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "echo 'Tests moved to @kernlang/review-mcp'",
+    "test": "vitest run",
     "lint": "tsc --noEmit"
   },
   "devDependencies": {
@@ -261,11 +289,12 @@
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^2.24.0",
     "esbuild": "^0.20.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.2"
   },
   "dependencies": {
     "@kernlang/core": "file:../kern-lang/packages/core",
     "@kernlang/mcp": "file:../kern-lang/packages/mcp",
-    "@kernlang/review-mcp": "^3.1.5"
+    "@kernlang/review-mcp": "file:../kern-lang/packages/review-mcp"
   }
 }

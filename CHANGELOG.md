@@ -1,5 +1,59 @@
 # Changelog
 
+## 2.0.0 (2026-04-09)
+
+### Build Flow
+- **Compiled output saves to disk** — creates sibling file (e.g. `server.kern` -> `server-server.ts`) instead of unsaved buffer
+- **Recompile + Back to BUILD buttons** in build result view — no more dead-end after compile
+- **Sidebar stability** — only re-renders when validity state changes, not on every keystroke (preserves scroll position)
+- **Spinner recovery** — parse errors during compile no longer leave sidebar stuck on the loading spinner
+- **Jump-to-finding** works on compiled output files (fixed URI handling for untitled/saved buffers)
+- **Disabled compile buttons** now show "Fix the syntax error above" hint
+- **Test Scaffold** — renamed from "Generate Security Tests" to reflect that tests are scaffolds that need wiring
+
+### AI-Assisted Authoring
+- **Engine pre-detection** — AI engines detected on activation, no more "No AI" flash when opening Generate mode
+- **Engine selection persists** — Import to .kern and Convert now use the last selected engine instead of always picking the first
+- **Aider integration fixed** — uses `--message` flag (was broken with `--message-file -`)
+- **API error messages truncated** to 200 chars — no more raw HTTP error bodies in the UI
+
+### UI
+- **Missing CSS variables added** — `--kern-surface`, `--kern-blue`, `--kern-yellow`, `--kern-muted`, `--foreground` now defined in `:root`
+- **Suggestion chips** use data attributes instead of inline JS (fixes apostrophe escaping bugs)
+- **BUILD mode protected** — background review results no longer silently override the BUILD tab
+- **Loading spinner** always shows when scanning (was skipping when stale results existed, showing wrong file's results)
+- **Status bar** tooltip corrected ("compile from sidebar or Cmd+Shift+M" instead of misleading "right-click to compile")
+
+### KERN MCP Server (in @kernlang/mcp-server)
+- **review-mcp-server upgraded** — now returns security score (0-100, A-F), runs post-scan analysis, infers IR structure
+- **compile-and-review** — compile .kern to MCP + auto-scan in one tool call
+- **audit-mcp-config** — scan Claude Desktop/Cursor/VS Code/Windsurf configs for hardcoded secrets, missing version pins
+- **generate-security-tests** — vitest suites from .kern guards with malicious payloads
+- 14 tools total (was 11)
+
+## 1.1.0 (2026-04-01)
+
+### Build Pipeline (Stable)
+- **Compile .kern -> TypeScript/Python** — deterministic transpile with 7 security guards auto-injected
+- `.kern` syntax highlighting (TextMate grammar) and validation-on-save
+- Right-click context menu: Compile, Validate
+- Compiled output auto-reviewed with 13 OWASP MCP rules
+
+### AI-Assisted Authoring (Beta)
+- **Generate .kern** — describe your server, pick an AI engine, get a production .kern with guards
+- **Import to .kern** — convert existing TS/Python MCP servers to .kern
+- **Convert TS <-> Python** — direct AI translation between languages
+- 6 CLI engines: Claude, Ollama, Codex, Gemini, Aider, OpenCode
+- 4 API providers: OpenAI, Anthropic, Gemini, Custom
+- Workspace context scanner: package.json, database schemas, API routes, OpenAPI specs, .env variable names
+- Beta labels in command palette, sidebar, and quick picks for all AI-assisted features
+
+### Improvements
+- Sidebar mode tabs (REVIEW / BUILD) with trust-level separation
+- Cross-platform CLI detection: Windows `shell: true` + stderr "not recognized" check (replaces Unix-only `which`)
+- README corrected: scan/compile local, AI-assisted authoring (Generate, Import, Convert) optional and user-configured
+- Note: Windows AI engine detection may need further testing on edge cases (WSL, PATHEXT)
+
 ## 1.0.0 (2026-03-27)
 
 First stable release.

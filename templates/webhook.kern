@@ -1,0 +1,34 @@
+mcp name=WebhookReceiver version=1.0
+
+  tool name=handle_webhook
+    description text="Receive and process incoming webhook payloads"
+    param name=payload type=string required=true
+    param name=signature type=string required=true
+    guard type=auth method=hmac param=signature env="WEBHOOK_SECRET"
+    guard type=sizeLimit param=payload maxBytes=262144
+    guard type=rateLimit window=60000 requests=200
+    handler <<<
+      const event = JSON.parse(args.payload);
+      const eventType = event.type || 'unknown';
+      await db.query(
+        `INSERT INTO webhook_events (type, payload, received_at) VALUES ($1, $2, NOW())`,
+        [eventType, args.payload]
+      );
+      return { content: [{ type: "text", text: JSON.stringify({ status: "accepted", type: eventType }) }] };
+    >>>
+
+  tool name=list_events
+    description text="List recent webhook events"
+    param name=limit type=number default=20
+    param name=type type=string default=""
+    guard type=validate param=limit min=1 max=100
+    guard type=sanitize param=type
+    guard type=sanitizeOutput
+    handler <<<
+      const query = args.type
+        ? `SELECT * FROM webhook_events WHERE type = $1 ORDER BY received_at DESC LIMIT $2`
+        : `SELECT * FROM webhook_events ORDER BY received_at DESC LIMIT $1`;
+      const params = args.type ? [args.type, args.limit] : [args.limit];
+      const events = await db.query(query, params);
+      return { content: [{ type: "text", text: JSON.stringify(events) }] };
+    >>>

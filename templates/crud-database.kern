@@ -1,0 +1,70 @@
+mcp name=DatabaseCRUD version=1.0
+
+  tool name=list_records
+    description text="List records from a table with pagination"
+    param name=table type=string required=true
+    param name=limit type=number default=20
+    param name=offset type=number default=0
+    guard type=sanitize param=table
+    guard type=validate param=limit min=1 max=100
+    guard type=validate param=offset min=0
+    guard type=rateLimit window=60000 requests=100
+    guard type=sanitizeOutput
+    handler <<<
+      const rows = await db.query(
+        `SELECT * FROM ${args.table} LIMIT $1 OFFSET $2`,
+        [args.limit, args.offset]
+      );
+      return { content: [{ type: "text", text: JSON.stringify(rows) }] };
+    >>>
+
+  tool name=get_record
+    description text="Get a single record by ID"
+    param name=table type=string required=true
+    param name=id type=string required=true
+    guard type=sanitize param=table
+    guard type=sanitize param=id
+    guard type=rateLimit window=60000 requests=100
+    guard type=sanitizeOutput
+    handler <<<
+      const row = await db.query(
+        `SELECT * FROM ${args.table} WHERE id = $1`,
+        [args.id]
+      );
+      return { content: [{ type: "text", text: JSON.stringify(row[0] ?? null) }] };
+    >>>
+
+  tool name=create_record
+    description text="Insert a new record"
+    param name=table type=string required=true
+    param name=data type=string required=true
+    guard type=sanitize param=table
+    guard type=sizeLimit param=data maxBytes=65536
+    guard type=rateLimit window=60000 requests=30
+    guard type=auth method=bearer
+    guard type=sanitizeOutput
+    handler <<<
+      const parsed = JSON.parse(args.data);
+      const keys = Object.keys(parsed);
+      const values = Object.values(parsed);
+      const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+      const row = await db.query(
+        `INSERT INTO ${args.table} (${keys.join(', ')}) VALUES (${placeholders}) RETURNING *`,
+        values
+      );
+      return { content: [{ type: "text", text: JSON.stringify(row[0]) }] };
+    >>>
+
+  tool name=delete_record
+    description text="Delete a record by ID"
+    param name=table type=string required=true
+    param name=id type=string required=true
+    guard type=sanitize param=table
+    guard type=sanitize param=id
+    guard type=auth method=bearer
+    guard type=rateLimit window=60000 requests=30
+    guard type=sanitizeOutput
+    handler <<<
+      await db.query(`DELETE FROM ${args.table} WHERE id = $1`, [args.id]);
+      return { content: [{ type: "text", text: "Deleted" }] };
+    >>>
